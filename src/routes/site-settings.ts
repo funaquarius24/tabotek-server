@@ -43,7 +43,7 @@ siteSettingsRouter.get('/site-settings', async (req: Request, res: Response) => 
     if (!authorized) return;
 
     const { db } = await connectToDatabase();
-    const doc = await db.collection('site_settings').findOne({ _id: 'global' });
+    const doc = await db.collection('site_settings').findOne({ _id: 'global' } as any);
 
     res.json({
       settings: doc?.settings ?? DEFAULT_SITE_SETTINGS,
@@ -69,7 +69,7 @@ siteSettingsRouter.put('/site-settings', async (req: Request, res: Response) => 
     const now = new Date();
 
     await db.collection('site_settings').updateOne(
-      { _id: 'global' },
+      { _id: 'global' } as any,
       {
         $set: {
           settings,
