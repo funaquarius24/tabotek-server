@@ -25,8 +25,15 @@ import { userSettingsRouter } from './routes/user-settings.js';
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',');
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
