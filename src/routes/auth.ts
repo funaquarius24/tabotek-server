@@ -1,10 +1,51 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import bcrypt from 'bcryptjs';
+import { signUrl, getOssEndpoint } from '../../lib/oss.js';
 
 export const authRouter = Router();
 
 const BCRYPT_ROUNDS = 12;
+
+const AVATAR_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const AVATAR_MAX_SIZE = 2 * 1024 * 1024; // 2MB
+
+authRouter.post('/upload-avatar', async (req: Request, res: Response) => {
+  try {
+    const { filename, contentType, size } = req.body;
+
+    if (!filename || !contentType) {
+      res.status(400).json({ error: 'filename and contentType are required' });
+      return;
+    }
+
+    if (!AVATAR_ALLOWED_TYPES.includes(contentType)) {
+      res.status(400).json({ error: `Invalid file type. Allowed: ${AVATAR_ALLOWED_TYPES.join(', ')}` });
+      return;
+    }
+
+    if (size && size > AVATAR_MAX_SIZE) {
+      res.status(400).json({ error: 'File too large. Maximum 2MB' });
+      return;
+    }
+
+    const ext = filename.includes('.') ? filename.substring(filename.lastIndexOf('.')) : '';
+    const imageId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const objectName = `avatars/${imageId}${ext}`;
+
+    const publicUrl = getOssEndpoint(objectName);
+    const expires = Math.floor(Date.now() / 1000) + 300;
+    const uploadUrl = signUrl('PUT', objectName, expires, contentType);
+
+    res.json({
+      uploadUrl,
+      publicUrl,
+    });
+  } catch (error) {
+    console.error('Failed to create avatar upload URL:', error);
+    res.status(500).json({ error: 'Failed to create upload URL' });
+  }
+});
 
 authRouter.post('/signin', async (req: Request, res: Response) => {
   try {
@@ -49,7 +90,7 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
 
 authRouter.post('/signup', async (req: Request, res: Response) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, avatarUrl } = req.body;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -72,14 +113,17 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    const result = await db.collection('users').insertOne({
+    const user: Record<string, unknown> = {
       email: email.toLowerCase(),
       passwordHash,
       name: name || email.split('@')[0],
       role: 'user',
+      avatar: avatarUrl || '',
       createdAt: new Date(),
       updatedAt: new Date()
-    });
+    };
+
+    const result = await db.collection('users').insertOne(user);
 
     res.status(201).json({
       success: true,

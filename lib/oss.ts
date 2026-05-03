@@ -14,7 +14,7 @@ function getOssConfig() {
   return { region, accessKeyId, accessKeySecret, bucket };
 }
 
-function getOssEndpoint(objectName: string): string {
+export function getOssEndpoint(objectName: string): string {
   const { region, bucket } = getOssConfig();
   const https = process.env.OSS_HTTPS !== 'false';
   const protocol = https ? 'https' : 'http';
