@@ -133,6 +133,8 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
       authorId: new ObjectId(userId),
       publishedAt: body.publishedAt ? new Date(body.publishedAt) : now,
       views: 0,
+      likes: 0,
+      dislikes: 0,
       createdAt: now,
       updatedAt: now
     };

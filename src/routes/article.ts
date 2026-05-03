@@ -124,6 +124,63 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
   }
 });
 
+articleRouter.post('/:slug/vote', async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const { vote, previousVote } = req.body;
+
+    if (!['like', 'dislike', null].includes(vote)) {
+      res.status(400).json({ error: 'vote must be "like", "dislike", or null' });
+      return;
+    }
+
+    const { db } = await connectToDatabase();
+    const article = await db.collection('articles').findOne({ slug });
+    if (!article) {
+      res.status(404).json({ error: 'Article not found' });
+      return;
+    }
+
+    const articleInc: Record<string, number> = {};
+    const userInc: Record<string, number> = {};
+
+    if (previousVote === 'like') {
+      articleInc.likes = -1;
+      userInc.totalLikes = -1;
+    } else if (previousVote === 'dislike') {
+      articleInc.dislikes = -1;
+      userInc.totalDislikes = -1;
+    }
+
+    if (vote === 'like') {
+      articleInc.likes = (articleInc.likes || 0) + 1;
+      userInc.totalLikes = (userInc.totalLikes || 0) + 1;
+    } else if (vote === 'dislike') {
+      articleInc.dislikes = (articleInc.dislikes || 0) + 1;
+      userInc.totalDislikes = (userInc.totalDislikes || 0) + 1;
+    }
+
+    await Promise.all([
+      db.collection('articles').updateOne({ slug }, { $inc: articleInc }),
+      db.collection('users').updateOne({ _id: article.authorId }, { $inc: userInc }),
+    ]);
+
+    const updatedArticle = await db.collection('articles').findOne({ slug });
+    res.json({
+      ...updatedArticle,
+      _id: updatedArticle!._id.toString(),
+      categoryId: updatedArticle!.categoryId?.toString(),
+      authorId: updatedArticle!.authorId?.toString(),
+      publishedAt: updatedArticle!.publishedAt.toISOString(),
+      createdAt: updatedArticle!.createdAt?.toISOString(),
+      updatedAt: updatedArticle!.updatedAt?.toISOString(),
+    });
+  } catch (error) {
+    console.error('Error voting on article:', error);
+    res.status(500).json({ error: 'Failed to record vote' });
+  }
+});
+
 articleRouter.delete('/:slug', async (req: Request, res: Response) => {
   try {
     const auth = await getAuthUser(req);
