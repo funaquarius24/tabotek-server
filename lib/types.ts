@@ -148,3 +148,10 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest extends Partial<CreateUserRequest> {}
+
+export interface UserSettings {
+  userId: string;
+  settings: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}

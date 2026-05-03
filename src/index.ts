@@ -14,11 +14,13 @@ import { sessionRouter } from './routes/session.js';
 import { checkAvailabilityRouter } from './routes/check-availability.js';
 import { requestAuthorRouter } from './routes/request-author.js';
 import { adminStatsRouter } from './routes/admin-stats.js';
+import { siteSettingsRouter } from './routes/site-settings.js';
 import { filesRouter } from './routes/files.js';
 import { filesUploadRouter } from './routes/files-upload.js';
 import { ossUploadUrlRouter } from './routes/oss-upload-url.js';
 import { ossConfirmRouter } from './routes/oss-confirm.js';
 import { ossImageProxyRouter } from './routes/oss-image-proxy.js';
+import { userSettingsRouter } from './routes/user-settings.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000', 10);
@@ -40,11 +42,13 @@ app.use('/api/auth', sessionRouter);
 app.use('/api/auth', checkAvailabilityRouter);
 app.use('/api/auth', requestAuthorRouter);
 app.use('/api/admin', adminStatsRouter);
+app.use('/api/admin', siteSettingsRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/files', filesUploadRouter);
 app.use('/api/oss', ossUploadUrlRouter);
 app.use('/api/oss', ossConfirmRouter);
 app.use('/api/oss', ossImageProxyRouter);
+app.use('/api/user', userSettingsRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
