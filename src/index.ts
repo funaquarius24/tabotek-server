@@ -24,7 +24,7 @@ import { userSettingsRouter } from './routes/user-settings.js';
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim());
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000,https://www.techteg.com').split(',').map(s => s.trim());
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && (allowedOrigins.includes(origin) || allowedOrigins.includes('*'))) {

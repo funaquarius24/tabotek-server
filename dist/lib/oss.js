@@ -1,5 +1,5 @@
 import { randomUUID, createHmac } from 'crypto';
-import { connectToDatabase } from '@/lib/mongodb';
+import { connectToDatabase } from './mongodb.js';
 function getOssConfig() {
     const region = process.env.OSS_REGION;
     const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
