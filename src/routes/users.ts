@@ -1,32 +1,27 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
-import { canAccessAdmin } from '../../lib/roles.js';
+import { canAccessAdmin, ROLE_LEVELS, UserRole } from '../../lib/roles.js';
 import bcrypt from 'bcryptjs';
 
 export const usersRouter = Router();
 
-async function requireAdmin(req: Request, res: Response): Promise<boolean> {
+async function getAuthUser(req: Request): Promise<{ _id: ObjectId; role: UserRole; userId: string } | null> {
   const userId = req.cookies?.user_id;
-  if (!userId || !ObjectId.isValid(userId)) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return false;
-  }
+  if (!userId || !ObjectId.isValid(userId)) return null;
   const { db } = await connectToDatabase();
   const user = await db.collection('users').findOne(
     { _id: new ObjectId(userId) },
-    { projection: { role: 1 } }
+    { projection: { role: 1, _id: 1 } }
   );
-  if (!user || !canAccessAdmin(user.role)) {
-    res.status(403).json({ error: 'Forbidden: admin access required' });
-    return false;
-  }
-  return true;
+  if (!user || !canAccessAdmin(user.role)) return null;
+  return { _id: user._id, role: user.role, userId: user._id.toString() };
 }
 
 usersRouter.get('/', async (req: Request, res: Response) => {
   try {
-    if (!(await requireAdmin(req, res))) return;
+    const authUser = await getAuthUser(req);
+    if (!authUser) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
     const { db } = await connectToDatabase();
 
@@ -50,9 +45,25 @@ usersRouter.get('/', async (req: Request, res: Response) => {
   }
 });
 
+async function getTargetUserRole(id: string): Promise<UserRole | null> {
+  if (!ObjectId.isValid(id)) return null;
+  const { db } = await connectToDatabase();
+  const user = await db.collection('users').findOne(
+    { _id: new ObjectId(id) },
+    { projection: { role: 1 } }
+  );
+  return user?.role || null;
+}
+
+function canModify(authRole: UserRole, targetRole: UserRole): boolean {
+  // Can modify self or any user with strictly lower role level
+  return ROLE_LEVELS[authRole] > ROLE_LEVELS[targetRole];
+}
+
 usersRouter.get('/:id', async (req: Request, res: Response) => {
   try {
-    if (!(await requireAdmin(req, res))) return;
+    const authUser = await getAuthUser(req);
+    if (!authUser) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
     const { id } = req.params;
     const { db } = await connectToDatabase();
@@ -86,13 +97,26 @@ usersRouter.get('/:id', async (req: Request, res: Response) => {
 
 usersRouter.put('/:id', async (req: Request, res: Response) => {
   try {
-    if (!(await requireAdmin(req, res))) return;
+    const authUser = await getAuthUser(req);
+    if (!authUser) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
     const { id } = req.params;
     const { db } = await connectToDatabase();
 
     if (!ObjectId.isValid(id)) {
       res.status(400).json({ error: 'Invalid user ID' });
+      return;
+    }
+
+    const targetRole = await getTargetUserRole(id);
+    if (!targetRole) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Self-edit is always allowed; otherwise must have strictly higher role
+    if (id !== authUser.userId && !canModify(authUser.role, targetRole)) {
+      res.status(403).json({ error: 'Forbidden: cannot modify users with equal or higher role' });
       return;
     }
 
@@ -104,6 +128,12 @@ usersRouter.put('/:id', async (req: Request, res: Response) => {
     if (body.role !== undefined) updateData.role = body.role;
     if (body.bio !== undefined) updateData.bio = body.bio;
     if (body.avatar !== undefined) updateData.avatar = body.avatar;
+
+    // Prevent elevating role to match or exceed own role
+    if (body.role && ROLE_LEVELS[body.role as UserRole] >= ROLE_LEVELS[authUser.role]) {
+      res.status(403).json({ error: 'Forbidden: cannot assign a role equal to or higher than your own' });
+      return;
+    }
 
     if (body.password && body.password.length >= 8) {
       updateData.passwordHash = await bcrypt.hash(body.password, 12);
@@ -138,7 +168,8 @@ usersRouter.put('/:id', async (req: Request, res: Response) => {
 
 usersRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
-    if (!(await requireAdmin(req, res))) return;
+    const authUser = await getAuthUser(req);
+    if (!authUser) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
     const { id } = req.params;
     const { db } = await connectToDatabase();
@@ -148,7 +179,12 @@ usersRouter.delete('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    // Prevent deleting the last superuser
+    // Cannot delete yourself
+    if (id === authUser.userId) {
+      res.status(400).json({ error: 'Cannot delete your own account' });
+      return;
+    }
+
     const targetUser = await db.collection('users').findOne(
       { _id: new ObjectId(id) },
       { projection: { role: 1 } }
@@ -156,6 +192,12 @@ usersRouter.delete('/:id', async (req: Request, res: Response) => {
 
     if (!targetUser) {
       res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Must have strictly higher role to delete
+    if (!canModify(authUser.role, targetUser.role)) {
+      res.status(403).json({ error: 'Forbidden: cannot delete users with equal or higher role' });
       return;
     }
 
