@@ -67,6 +67,18 @@ categoryRouter.put('/:id', async (req: Request, res: Response) => {
         res.status(409).json({ error: 'Category with this slug already exists' });
         return;
       }
+      // Set up 301 redirect for SEO
+      await db.collection('redirects').insertOne({
+        from: `/categories/${existingCategory.slug}`,
+        to: `/categories/${body.slug}`,
+        statusCode: 301,
+        createdAt: new Date(),
+      });
+      // Also update article category references if using slug-based references
+      await db.collection('articles').updateMany(
+        { categorySlug: existingCategory.slug },
+        { $set: { categorySlug: body.slug } }
+      );
     }
 
     const updateData: any = { ...body };

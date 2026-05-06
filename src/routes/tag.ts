@@ -66,6 +66,13 @@ tagRouter.put('/:id', async (req: Request, res: Response) => {
         res.status(409).json({ error: 'Tag with this slug already exists' });
         return;
       }
+      // Set up 301 redirect for SEO
+      await db.collection('redirects').insertOne({
+        from: `/tags/${existingTag.slug}`,
+        to: `/tags/${body.slug}`,
+        statusCode: 301,
+        createdAt: new Date(),
+      });
     }
 
     const updateData: any = {
