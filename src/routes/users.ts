@@ -6,7 +6,9 @@ import { canAccessAdmin } from '../../lib/roles.js';
 export const usersRouter = Router();
 
 async function requireAdmin(req: Request, res: Response): Promise<boolean> {
+  const rawCookie = req.headers.cookie;
   const userId = req.cookies?.user_id;
+  console.log(`[requireAdmin] cookies raw: ${rawCookie}, parsed user_id: ${userId}, isValid: ${userId ? ObjectId.isValid(userId) : 'N/A'}`);
   if (!userId || !ObjectId.isValid(userId)) {
     res.status(401).json({ error: 'Unauthorized' });
     return false;
@@ -16,6 +18,7 @@ async function requireAdmin(req: Request, res: Response): Promise<boolean> {
     { _id: new ObjectId(userId) },
     { projection: { role: 1 } }
   );
+  console.log(`[requireAdmin] db user found: ${!!user}, role: ${user?.role}`);
   if (!user || !canAccessAdmin(user.role)) {
     res.status(403).json({ error: 'Forbidden: admin access required' });
     return false;
