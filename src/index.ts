@@ -22,6 +22,7 @@ import { ossImageProxyRouter } from './routes/oss-image-proxy.js';
 import { tagsRouter } from './routes/tags.js';
 import { tagRouter } from './routes/tag.js';
 import { userSettingsRouter } from './routes/user-settings.js';
+import { usersRouter } from './routes/users.js';
 import { redirectsRouter } from './routes/redirects.js';
 
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api/oss', ossConfirmRouter);
 app.use('/api/oss', ossImageProxyRouter);
 app.use('/api/tags', tagsRouter);
 app.use('/api/tags', tagRouter);
+app.use('/api/users', usersRouter);
 app.use('/api/user', userSettingsRouter);
 
 app.get('/api/health', (_req, res) => {
