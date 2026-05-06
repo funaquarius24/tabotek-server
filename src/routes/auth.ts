@@ -52,17 +52,22 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
     const { email, password } = req.body;
     const { db } = await connectToDatabase();
 
-    const user = await db.collection('users').findOne({ email: email.toLowerCase() });
+    const user = await db.collection('users').findOne({
+      $or: [
+        { email: email.toLowerCase() },
+        { name: email }
+      ]
+    });
 
     if (!user) {
-      res.status(401).json({ error: 'Invalid email or password' });
+      res.status(401).json({ error: 'Invalid email/username or password' });
       return;
     }
 
     const passwordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordValid) {
-      res.status(401).json({ error: 'Invalid email or password' });
+      res.status(401).json({ error: 'Invalid email/username or password' });
       return;
     }
 
