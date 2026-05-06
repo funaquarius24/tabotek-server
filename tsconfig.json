@@ -15,5 +15,5 @@
     }
   },
   "include": ["src/**/*", "lib/**/*"],
-  "exclude": ["node_modules", "dist", "lib/auth-server.ts", "lib/session.ts"]
+  "exclude": ["node_modules", "dist", "lib/auth-server.ts", "lib/session.ts", "src/**/*.test.ts", "src/**/*.integration.test.ts", "vitest.config.ts", "vitest.config.integration.ts"]
 }
