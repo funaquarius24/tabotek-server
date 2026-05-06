@@ -19,7 +19,14 @@ articleRouter.get('/:slug', async (req: Request, res: Response) => {
     const { slug } = req.params;
     const { db } = await connectToDatabase();
 
-    const article = await db.collection('articles').findOne({ slug });
+    let query: any;
+    if (ObjectId.isValid(slug)) {
+      query = { $or: [{ _id: new ObjectId(slug) }, { slug }] };
+    } else {
+      query = { slug };
+    }
+
+    const article = await db.collection('articles').findOne(query);
 
     if (!article) {
       res.status(404).json({ error: 'Article not found' });
