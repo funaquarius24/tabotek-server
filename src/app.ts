@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
@@ -28,21 +29,18 @@ import { redirectsRouter } from './routes/redirects.js';
 const app = express();
 
 const allowedOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000,https://www.techteg.com').split(',').map(s => s.trim().toLowerCase());
-app.use((req, res, next) => {
-  const origin = (req.headers.origin || '').toLowerCase();
-  const isAllowed = origin && (allowedOrigins.includes(origin) || allowedOrigins.includes('*'));
-  if (isAllowed) {
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin as string);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
-  }
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
-  next();
-});
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin.toLowerCase()) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
