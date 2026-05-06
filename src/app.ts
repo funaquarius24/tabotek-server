@@ -27,11 +27,12 @@ import { redirectsRouter } from './routes/redirects.js';
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000,https://www.techteg.com').split(',').map(s => s.trim());
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000,https://www.techteg.com').split(',').map(s => s.trim().toLowerCase());
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && (allowedOrigins.includes(origin) || allowedOrigins.includes('*'))) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  const origin = (req.headers.origin || '').toLowerCase();
+  const isAllowed = origin && (allowedOrigins.includes(origin) || allowedOrigins.includes('*'));
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin as string);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
