@@ -22,7 +22,7 @@ import { ossImageProxyRouter } from './routes/oss-image-proxy.js';
 import { tagsRouter } from './routes/tags.js';
 import { tagRouter } from './routes/tag.js';
 import { userSettingsRouter } from './routes/user-settings.js';
-import { connectToDatabase } from '../lib/mongodb.js';
+import { redirectsRouter } from './routes/redirects.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '4000', 10);
@@ -45,22 +45,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
-// 301 redirect middleware for renamed slugs
-app.use(async (req, res, next) => {
-  if (req.method !== 'GET') { next(); return; }
-  const redirectPaths = ['/categories/', '/tags/'];
-  const shouldCheckRedirect = redirectPaths.some(p => req.path.startsWith(p));
-  if (!shouldCheckRedirect) { next(); return; }
-  try {
-    const { db } = await connectToDatabase();
-    const redirect = await db.collection('redirects').findOne({ from: req.path });
-    if (redirect) {
-      res.redirect(redirect.statusCode || 301, redirect.to);
-      return;
-    }
-  } catch { /* silently continue if redirect check fails */ }
-  next();
-});
+app.use('/api/redirect', redirectsRouter);
 
 app.use('/api/articles', articlesRouter);
 app.use('/api/articles', articleRouter);

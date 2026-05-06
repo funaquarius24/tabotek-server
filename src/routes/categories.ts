@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { canAccessAdmin } from '../../lib/roles.js';
 
 export const categoriesRouter = Router();
 
@@ -48,7 +49,21 @@ categoriesRouter.get('/', async (req: Request, res: Response) => {
 
 categoriesRouter.post('/', async (req: Request, res: Response) => {
   try {
+    const userId = req.cookies?.user_id;
+    if (!userId || !ObjectId.isValid(userId)) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
     const { db } = await connectToDatabase();
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { role: 1 } }
+    );
+    if (!user || !canAccessAdmin(user.role)) {
+      res.status(403).json({ error: 'Forbidden: admin access required' });
+      return;
+    }
+
     const body = req.body;
 
     if (!body.name || !body.slug) {

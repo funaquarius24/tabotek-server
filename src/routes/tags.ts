@@ -1,8 +1,27 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { canAccessAdmin } from '../../lib/roles.js';
 
 export const tagsRouter = Router();
+
+async function requireAdmin(req: Request, res: Response): Promise<boolean> {
+  const userId = req.cookies?.user_id;
+  if (!userId || !ObjectId.isValid(userId)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  const { db } = await connectToDatabase();
+  const user = await db.collection('users').findOne(
+    { _id: new ObjectId(userId) },
+    { projection: { role: 1 } }
+  );
+  if (!user || !canAccessAdmin(user.role)) {
+    res.status(403).json({ error: 'Forbidden: admin access required' });
+    return false;
+  }
+  return true;
+}
 
 tagsRouter.get('/', async (_req: Request, res: Response) => {
   try {
@@ -30,6 +49,7 @@ tagsRouter.get('/', async (_req: Request, res: Response) => {
 
 tagsRouter.post('/', async (req: Request, res: Response) => {
   try {
+    if (!(await requireAdmin(req, res))) return;
     const { db } = await connectToDatabase();
     const body = req.body;
 
@@ -72,6 +92,7 @@ tagsRouter.post('/', async (req: Request, res: Response) => {
 // Merge source tag into target tag
 tagsRouter.post('/merge', async (req: Request, res: Response) => {
   try {
+    if (!(await requireAdmin(req, res))) return;
     const { sourceId, targetId } = req.body;
 
     if (!sourceId || !targetId) {
@@ -131,6 +152,7 @@ tagsRouter.post('/merge', async (req: Request, res: Response) => {
 // Cleanup unused tags (articleCount === 0, older than 30 days)
 tagsRouter.post('/cleanup', async (req: Request, res: Response) => {
   try {
+    if (!(await requireAdmin(req, res))) return;
     const { db } = await connectToDatabase();
 
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -218,8 +240,9 @@ tagsRouter.get('/suggestions', async (_req: Request, res: Response) => {
 });
 
 // Recalculate article counts for all tags
-tagsRouter.post('/recount', async (_req: Request, res: Response) => {
+tagsRouter.post('/recount', async (req: Request, res: Response) => {
   try {
+    if (!(await requireAdmin(req, res))) return;
     const { db } = await connectToDatabase();
 
     const allTags = await db.collection('tags').find({}).toArray();

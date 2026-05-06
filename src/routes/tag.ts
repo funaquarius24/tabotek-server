@@ -1,8 +1,27 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { canAccessAdmin } from '../../lib/roles.js';
 
 export const tagRouter = Router();
+
+async function requireAdmin(req: Request, res: Response): Promise<boolean> {
+  const userId = req.cookies?.user_id;
+  if (!userId || !ObjectId.isValid(userId)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  const { db } = await connectToDatabase();
+  const user = await db.collection('users').findOne(
+    { _id: new ObjectId(userId) },
+    { projection: { role: 1 } }
+  );
+  if (!user || !canAccessAdmin(user.role)) {
+    res.status(403).json({ error: 'Forbidden: admin access required' });
+    return false;
+  }
+  return true;
+}
 
 tagRouter.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -40,6 +59,8 @@ tagRouter.get('/:id', async (req: Request, res: Response) => {
 
 tagRouter.put('/:id', async (req: Request, res: Response) => {
   try {
+    if (!(await requireAdmin(req, res))) return;
+
     const { id } = req.params;
     const { db } = await connectToDatabase();
     const body = req.body;
@@ -66,7 +87,6 @@ tagRouter.put('/:id', async (req: Request, res: Response) => {
         res.status(409).json({ error: 'Tag with this slug already exists' });
         return;
       }
-      // Set up 301 redirect for SEO
       await db.collection('redirects').insertOne({
         from: `/tags/${existingTag.slug}`,
         to: `/tags/${body.slug}`,
@@ -80,12 +100,7 @@ tagRouter.put('/:id', async (req: Request, res: Response) => {
       updatedAt: new Date()
     };
 
-    const result = await db.collection('tags').updateOne(query, { $set: updateData });
-
-    if (result.modifiedCount === 0) {
-      res.status(400).json({ error: 'Tag not updated' });
-      return;
-    }
+    await db.collection('tags').updateOne(query, { $set: updateData });
 
     const updatedQuery = isObjectId ? { _id: new ObjectId(id) } : { slug: body.slug || id };
     const updatedTag = await db.collection('tags').findOne(updatedQuery);
@@ -106,6 +121,8 @@ tagRouter.put('/:id', async (req: Request, res: Response) => {
 
 tagRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
+    if (!(await requireAdmin(req, res))) return;
+
     const { id } = req.params;
     const { db } = await connectToDatabase();
 
