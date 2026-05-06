@@ -19,6 +19,8 @@ import { filesUploadRouter } from './routes/files-upload.js';
 import { ossUploadUrlRouter } from './routes/oss-upload-url.js';
 import { ossConfirmRouter } from './routes/oss-confirm.js';
 import { ossImageProxyRouter } from './routes/oss-image-proxy.js';
+import { tagsRouter } from './routes/tags.js';
+import { tagRouter } from './routes/tag.js';
 import { userSettingsRouter } from './routes/user-settings.js';
 
 const app = express();
@@ -58,6 +60,8 @@ app.use('/api/files', filesUploadRouter);
 app.use('/api/oss', ossUploadUrlRouter);
 app.use('/api/oss', ossConfirmRouter);
 app.use('/api/oss', ossImageProxyRouter);
+app.use('/api/tags', tagsRouter);
+app.use('/api/tags', tagRouter);
 app.use('/api/user', userSettingsRouter);
 
 app.get('/api/health', (_req, res) => {

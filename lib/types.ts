@@ -137,6 +137,37 @@ export interface CreateCategoryRequest {
 
 export interface UpdateCategoryRequest extends Partial<CreateCategoryRequest> {}
 
+export interface Tag {
+  _id: ObjectId;
+  name: string;
+  slug: string;
+  description: string;
+  relatedTags: string[];
+  articleCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TagResponse {
+  _id: string;
+  name: string;
+  slug: string;
+  description: string;
+  relatedTags: string[];
+  articleCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTagRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  relatedTags?: string[];
+}
+
+export interface UpdateTagRequest extends Partial<CreateTagRequest> {}
+
 export interface FileRecord {
   _id: string;
   originalname: string;

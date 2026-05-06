@@ -32,10 +32,11 @@ async function seedDatabase(force = false) {
     }
 
     if (force) {
-      console.log('🗑️  Force mode: clearing existing data...');
+      console.log('🗑️ Force mode: clearing existing data...');
       await db.collection('articles').deleteMany({});
       await db.collection('categories').deleteMany({});
       await db.collection('users').deleteMany({});
+      await db.collection('tags').deleteMany({});
       console.log('✅ Database cleared');
     }
     
@@ -1092,10 +1093,35 @@ async function seedDatabase(force = false) {
       console.log(`✅ Article "${article.title}" created`);
     }
     
+    // Create tags from article tags
+    const uniqueTagNames = [...new Set(sampleArticles.flatMap(a => a.tags))];
+    const tagSeeds = uniqueTagNames.map(name => {
+      const relatedTags = sampleArticles
+        .filter(a => a.tags.includes(name))
+        .flatMap(a => a.tags)
+        .filter(t => t !== name);
+      const uniqueRelated = [...new Set(relatedTags)].slice(0, 5);
+      return {
+        name,
+        slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+        description: `Articles and tutorials about ${name}`,
+        relatedTags: uniqueRelated,
+        articleCount: sampleArticles.filter(a => a.tags.includes(name)).length,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+    });
+
+    for (const tag of tagSeeds) {
+      await db.collection('tags').insertOne(tag);
+      console.log(`✅ Tag "${tag.name}" created`);
+    }
+
     console.log(`\n🎉 Seed completed successfully!`);
     console.log(`📊 Created/updated:`);
     console.log(`   - ${seedUsers.length} users (superuser, admin, editor, author, user)`);
     console.log(`   - ${Object.keys(categoryIds).length} categories`);
+    console.log(`   - ${tagSeeds.length} tags`);
     console.log(`   - ${articlesCreated} articles`);
     console.log(`\n🔑 Default credentials (all use password123):`);
     console.log(`   Superuser: superuser@techhub.example.com`);
