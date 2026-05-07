@@ -3,6 +3,7 @@ import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { canAccessAdmin } from '../../lib/roles.js';
 import showdown from 'showdown';
+import { sendMail, buildCommentReplyHtml, buildNewCommentHtml } from '../../lib/mail.js';
 
 const mdConverter = new showdown.Converter({ simpleLineBreaks: true, openLinksInNewWindow: true });
 
@@ -94,7 +95,7 @@ commentsRouter.get('/:slug/comments', async (req: Request, res: Response) => {
 commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
-    const { author, content, parentId } = req.body;
+    const { content, parentId } = req.body;
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
 
     if (!checkRateLimit(ip)) {
@@ -102,19 +103,29 @@ commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
       return;
     }
 
-    if (!author || !author.name || !content) {
-      res.status(400).json({ error: 'Author name and content are required' });
+    const uid = getUserId(req);
+    if (!uid) {
+      res.status(401).json({ error: 'You must be signed in to comment' });
       return;
     }
 
-    if (!content.trim()) {
+    if (!content || !content.trim()) {
       res.status(400).json({ error: 'Comment content cannot be empty' });
       return;
     }
 
     const { db } = await connectToDatabase();
 
-    const article = await db.collection('articles').findOne({ slug });
+    const [user, article] = await Promise.all([
+      db.collection('users').findOne({ _id: new ObjectId(uid) }, { projection: { name: 1, email: 1, avatar: 1 } }),
+      db.collection('articles').findOne({ slug }),
+    ]);
+
+    if (!user) {
+      res.status(401).json({ error: 'User not found' });
+      return;
+    }
+
     if (!article) {
       res.status(404).json({ error: 'Article not found' });
       return;
@@ -153,7 +164,6 @@ commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
       parentSlug = parent.articleSlug || null;
     }
 
-    const uid = getUserId(req);
     const now = new Date();
     const comment = {
       articleSlug: slug,
@@ -161,10 +171,10 @@ commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
       parentId: parentId ? new ObjectId(parentId) : null,
       depth,
       author: {
-        userId: uid ? new ObjectId(uid) : null,
-        name: author.name.trim(),
-        email: author.email || '',
-        avatar: author.avatar || '',
+        userId: new ObjectId(uid),
+        name: user.name,
+        email: user.email || '',
+        avatar: user.avatar || '',
       },
       content: content.trim(),
       likes: 0,
@@ -178,9 +188,15 @@ commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
 
     const result = await db.collection('comments').insertOne(comment);
 
+    // Email: notify parent comment author
     if (parentEmail && parentSlug) {
-      const systemUrl = process.env.SYSTEM_URL || 'https://tabotek-server.vercel.app';
-      console.log(`[EMAIL NOTIFICATION] To: ${parentEmail} | Subject: ${author.name} replied to your comment on ${parentSlug} | URL: ${systemUrl}/article/${parentSlug}`);
+      sendMail(parentEmail, 'New reply to your comment', buildCommentReplyHtml(user.name, parentSlug, content.trim().slice(0, 200)));
+    }
+
+    // Email: notify article author
+    const articleAuthor = await db.collection('users').findOne({ _id: article.authorId }, { projection: { email: 1 } });
+    if (articleAuthor?.email && (!parentEmail || articleAuthor.email !== parentEmail)) {
+      sendMail(articleAuthor.email, `New comment on "${article.title || slug}"`, buildNewCommentHtml(user.name, slug, article.title || slug));
     }
 
     res.status(201).json(serializeComment({ ...comment, _id: result.insertedId }));

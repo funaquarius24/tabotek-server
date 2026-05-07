@@ -15,6 +15,7 @@ import { resetRateLimits } from './comments.js';
 const userId = createId();
 const articleId = createId();
 const commentId = createId();
+const agent = request.agent(app);
 
 function mockComment(overrides = {}) {
   return {
@@ -40,6 +41,7 @@ describe('Comments Routes', () => {
   beforeEach(() => {
     setupMockDb(connectToDatabase);
     resetRateLimits();
+    getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'TestUser', email: 'test@test.com', avatar: '' });
   });
 
   describe('GET /api/articles/:slug/comments', () => {
@@ -60,29 +62,50 @@ describe('Comments Routes', () => {
     });
   });
 
-  describe('POST /api/articles/:slug/comments', () => {
-    it('creates a top-level comment', async () => {
-      getMockCollection('articles').findOne.mockResolvedValue({ _id: new ObjectId(articleId), slug: 'test-article', allowComments: true });
+describe('POST /api/articles/:slug/comments', () => {
+    function authSetup() {
+      setupMockDb(connectToDatabase);
+      resetRateLimits();
+      getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'Bob', email: 'bob@test.com', avatar: '' });
+      getMockCollection('articles').findOne.mockResolvedValue({ _id: new ObjectId(articleId), slug: 'test-article', allowComments: true, authorId: new ObjectId(createId()) });
       getMockCollection('comments').insertOne.mockResolvedValue({ insertedId: new ObjectId(createId()) });
+    }
+
+    it('creates a top-level comment when authenticated', async () => {
+      authSetup();
 
       const res = await request(app)
         .post('/api/articles/test-article/comments')
-        .send({ author: { name: 'Bob' }, content: 'Nice post!' });
+        .set('Cookie', `user_id=${userId}`)
+        .send({ content: 'Nice post!' });
       expect(res.status).toBe(201);
       expect(res.body.author.name).toBe('Bob');
       expect(res.body.depth).toBe(0);
       expect(res.body.parentId).toBeNull();
     });
 
+    it('returns 401 without auth', async () => {
+      authSetup();
+
+      const res = await request(app)
+        .post('/api/articles/test-article/comments')
+        .send({ content: 'Nice post!' });
+      expect(res.status).toBe(401);
+    });
+
     it('creates a reply with depth validation', async () => {
       const parentCommentId = createId();
+      getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'Charlie', email: '', avatar: '' });
       getMockCollection('articles').findOne.mockResolvedValue({ _id: new ObjectId(articleId), slug: 'test-article', allowComments: true });
-      getMockCollection('comments').findOne.mockResolvedValue(mockComment({ _id: new ObjectId(parentCommentId), depth: 0 }));
+      getMockCollection('comments').findOne
+        .mockResolvedValueOnce(mockComment({ _id: new ObjectId(parentCommentId), depth: 0 }))
+        .mockResolvedValueOnce(mockComment({ _id: new ObjectId(parentCommentId), depth: 0, likes: 0 }));
       getMockCollection('comments').insertOne.mockResolvedValue({ insertedId: new ObjectId(createId()) });
 
       const res = await request(app)
         .post('/api/articles/test-article/comments')
-        .send({ author: { name: 'Charlie' }, content: 'A reply', parentId: parentCommentId });
+        .set('Cookie', `user_id=${userId}`)
+        .send({ content: 'A reply', parentId: parentCommentId });
       expect(res.status).toBe(201);
       expect(res.body.depth).toBe(1);
       expect(res.body.parentId).toBe(parentCommentId);
@@ -90,52 +113,55 @@ describe('Comments Routes', () => {
 
     it('rejects reply beyond depth 3', async () => {
       const deepId = createId();
+      getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'Deep', email: '', avatar: '' });
       getMockCollection('articles').findOne.mockResolvedValue({ _id: new ObjectId(articleId), slug: 'test-article', allowComments: true });
       getMockCollection('comments').findOne.mockResolvedValue(mockComment({ _id: new ObjectId(deepId), depth: 3 }));
 
       const res = await request(app)
         .post('/api/articles/test-article/comments')
-        .send({ author: { name: 'Deep' }, content: 'Too deep', parentId: deepId });
+        .set('Cookie', `user_id=${userId}`)
+        .send({ content: 'Too deep', parentId: deepId });
       expect(res.status).toBe(400);
       expect(res.body.error).toContain('Maximum reply depth');
     });
 
-    it('rejects missing author name', async () => {
+    it('rejects empty content', async () => {
+      getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'Bob', email: '', avatar: '' });
       const res = await request(app)
         .post('/api/articles/test-article/comments')
-        .send({ content: 'Some content' });
-      expect(res.status).toBe(400);
-    });
-
-    it('rejects missing content', async () => {
-      const res = await request(app)
-        .post('/api/articles/test-article/comments')
-        .send({ author: { name: 'Bob' } });
+        .set('Cookie', `user_id=${userId}`)
+        .send({ content: '   ' });
       expect(res.status).toBe(400);
     });
 
     it('returns 404 when article not found', async () => {
+      getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'Bob', email: '', avatar: '' });
       getMockCollection('articles').findOne.mockResolvedValue(null);
       const res = await request(app)
         .post('/api/articles/non-existent/comments')
-        .send({ author: { name: 'Bob' }, content: 'Content' });
+        .set('Cookie', `user_id=${userId}`)
+        .send({ content: 'Content' });
       expect(res.status).toBe(404);
     });
 
     it('returns 403 when comments are disabled', async () => {
+      getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'Bob', email: '', avatar: '' });
       getMockCollection('articles').findOne.mockResolvedValue({ _id: new ObjectId(articleId), slug: 'test-article', allowComments: false });
       const res = await request(app)
         .post('/api/articles/test-article/comments')
-        .send({ author: { name: 'Bob' }, content: 'Content' });
+        .set('Cookie', `user_id=${userId}`)
+        .send({ content: 'Content' });
       expect(res.status).toBe(403);
     });
 
     it('returns 404 for invalid parent comment', async () => {
+      getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), name: 'Bob', email: '', avatar: '' });
       getMockCollection('articles').findOne.mockResolvedValue({ _id: new ObjectId(articleId), slug: 'test-article', allowComments: true });
       getMockCollection('comments').findOne.mockResolvedValue(null);
       const res = await request(app)
         .post('/api/articles/test-article/comments')
-        .send({ author: { name: 'Bob' }, content: 'Content', parentId: createId() });
+        .set('Cookie', `user_id=${userId}`)
+        .send({ content: 'Content', parentId: createId() });
       expect(res.status).toBe(404);
     });
   });
