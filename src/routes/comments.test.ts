@@ -10,21 +10,25 @@ import { app } from '../app.js';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { setupMockDb, getMockCollection, createId } from '../test-utils.js';
 import { ObjectId } from 'mongodb';
+import { resetRateLimits } from './comments.js';
 
 const userId = createId();
 const articleId = createId();
+const commentId = createId();
 
 function mockComment(overrides = {}) {
   return {
-    _id: new ObjectId(createId()),
+    _id: new ObjectId(commentId),
     articleSlug: 'test-article',
     articleId: new ObjectId(articleId),
     parentId: null,
     depth: 0,
-    author: { name: 'Alice', email: '', avatar: '' },
+    author: { name: 'Alice', email: '', avatar: '', userId: null },
     content: 'Great article!',
     likes: 0,
     dislikes: 0,
+    hidden: false,
+    flagged: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     deleted: false,
@@ -35,6 +39,7 @@ function mockComment(overrides = {}) {
 describe('Comments Routes', () => {
   beforeEach(() => {
     setupMockDb(connectToDatabase);
+    resetRateLimits();
   });
 
   describe('GET /api/articles/:slug/comments', () => {
@@ -176,24 +181,25 @@ describe('Comments Routes', () => {
   describe('DELETE /api/articles/:slug/comments/:commentId', () => {
     it('deletes a comment when authorized', async () => {
       getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), role: 'admin' });
+      getMockCollection('comments').findOne.mockResolvedValue(mockComment());
       getMockCollection('comments').deleteOne.mockResolvedValue({ deletedCount: 1 });
 
       const res = await request(app)
-        .delete(`/api/articles/test-article/comments/${createId()}`)
+        .delete(`/api/articles/test-article/comments/${commentId}`)
         .set('Cookie', `user_id=${userId}`);
       expect(res.status).toBe(200);
     });
 
     it('returns 401 without auth', async () => {
-      const res = await request(app).delete(`/api/articles/test-article/comments/${createId()}`);
+      const res = await request(app).delete(`/api/articles/test-article/comments/${commentId}`);
       expect(res.status).toBe(401);
     });
 
     it('returns 404 for non-existent comment', async () => {
       getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), role: 'admin' });
-      getMockCollection('comments').deleteOne.mockResolvedValue({ deletedCount: 0 });
+      getMockCollection('comments').findOne.mockResolvedValue(null);
       const res = await request(app)
-        .delete(`/api/articles/test-article/comments/${createId()}`)
+        .delete(`/api/articles/test-article/comments/${commentId}`)
         .set('Cookie', `user_id=${userId}`);
       expect(res.status).toBe(404);
     });

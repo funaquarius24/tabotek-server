@@ -8,6 +8,7 @@ export async function startMemoryServer() {
   mongoServer = await MongoMemoryServer.create();
   const uri = mongoServer.getUri();
   process.env.MONGODB_URI = uri;
+  process.env.MONGODB_DB = 'test_comments';
   return uri;
 }
 
@@ -23,10 +24,7 @@ export async function clearCollections() {
   const client = new MongoClient(uri);
   await client.connect();
   const db = client.db(process.env.MONGODB_DB || 'test');
-  const collections = await db.collections();
-  for (const collection of collections) {
-    await collection.deleteMany({});
-  }
+  await db.dropDatabase();
   await client.close();
 }
 
