@@ -5,6 +5,17 @@ import { canAccessAdmin } from '../../lib/roles.js';
 
 export const commentsRouter = Router();
 
+function serializeComment(c: any) {
+  return {
+    ...c,
+    _id: c._id.toString(),
+    articleId: c.articleId?.toString(),
+    parentId: c.parentId?.toString() || null,
+    createdAt: c.createdAt?.toISOString(),
+    updatedAt: c.updatedAt?.toISOString(),
+  };
+}
+
 commentsRouter.get('/:slug/comments', async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
@@ -16,15 +27,7 @@ commentsRouter.get('/:slug/comments', async (req: Request, res: Response) => {
       .sort({ createdAt: -1 })
       .toArray();
 
-    const commentsWithStringIds = comments.map(c => ({
-      ...c,
-      _id: c._id.toString(),
-      articleId: c.articleId?.toString(),
-      createdAt: c.createdAt?.toISOString(),
-      updatedAt: c.updatedAt?.toISOString(),
-    }));
-
-    res.json({ comments: commentsWithStringIds });
+    res.json({ comments: comments.map(serializeComment) });
   } catch (error) {
     console.error('Error fetching comments:', error);
     res.status(500).json({ error: 'Failed to fetch comments' });
@@ -34,7 +37,7 @@ commentsRouter.get('/:slug/comments', async (req: Request, res: Response) => {
 commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
-    const { author, content } = req.body;
+    const { author, content, parentId } = req.body;
 
     if (!author || !author.name || !content) {
       res.status(400).json({ error: 'Author name and content are required' });
@@ -59,16 +62,40 @@ commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
       return;
     }
 
+    let depth = 0;
+    if (parentId) {
+      if (!ObjectId.isValid(parentId)) {
+        res.status(400).json({ error: 'Invalid parent comment ID' });
+        return;
+      }
+
+      const parent = await db.collection('comments').findOne({ _id: new ObjectId(parentId), deleted: { $ne: true } });
+      if (!parent) {
+        res.status(404).json({ error: 'Parent comment not found' });
+        return;
+      }
+
+      depth = (parent.depth || 0) + 1;
+      if (depth > 3) {
+        res.status(400).json({ error: 'Maximum reply depth reached (4 levels)' });
+        return;
+      }
+    }
+
     const now = new Date();
     const comment = {
       articleSlug: slug,
       articleId: article._id,
+      parentId: parentId ? new ObjectId(parentId) : null,
+      depth,
       author: {
         name: author.name.trim(),
         email: author.email || '',
         avatar: author.avatar || '',
       },
       content: content.trim(),
+      likes: 0,
+      dislikes: 0,
       createdAt: now,
       updatedAt: now,
       deleted: false,
@@ -76,16 +103,50 @@ commentsRouter.post('/:slug/comments', async (req: Request, res: Response) => {
 
     const result = await db.collection('comments').insertOne(comment);
 
-    res.status(201).json({
-      ...comment,
-      _id: result.insertedId.toString(),
-      articleId: comment.articleId.toString(),
-      createdAt: comment.createdAt.toISOString(),
-      updatedAt: comment.updatedAt.toISOString(),
-    });
+    res.status(201).json(serializeComment({ ...comment, _id: result.insertedId }));
   } catch (error) {
     console.error('Error creating comment:', error);
     res.status(500).json({ error: 'Failed to create comment' });
+  }
+});
+
+commentsRouter.post('/:slug/comments/:commentId/like', async (req: Request, res: Response) => {
+  try {
+    const { commentId } = req.params;
+    const { vote } = req.body;
+
+    if (!ObjectId.isValid(commentId)) {
+      res.status(400).json({ error: 'Invalid comment ID' });
+      return;
+    }
+
+    if (!['like', 'dislike', null].includes(vote)) {
+      res.status(400).json({ error: 'vote must be "like", "dislike", or null' });
+      return;
+    }
+
+    const { db } = await connectToDatabase();
+    const comment = await db.collection('comments').findOne({ _id: new ObjectId(commentId), deleted: { $ne: true } });
+
+    if (!comment) {
+      res.status(404).json({ error: 'Comment not found' });
+      return;
+    }
+
+    const inc: Record<string, number> = {};
+    if (vote === 'like') inc.likes = 1;
+    else if (vote === 'dislike') inc.dislikes = 1;
+
+    await db.collection('comments').updateOne(
+      { _id: new ObjectId(commentId) },
+      { $inc: inc, $set: { updatedAt: new Date() } }
+    );
+
+    const updated = await db.collection('comments').findOne({ _id: new ObjectId(commentId) });
+    res.json(serializeComment(updated));
+  } catch (error) {
+    console.error('Error voting on comment:', error);
+    res.status(500).json({ error: 'Failed to record vote' });
   }
 });
 
