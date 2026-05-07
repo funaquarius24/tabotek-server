@@ -25,6 +25,7 @@ import { tagRouter } from './routes/tag.js';
 import { userSettingsRouter } from './routes/user-settings.js';
 import { usersRouter } from './routes/users.js';
 import { redirectsRouter } from './routes/redirects.js';
+import { commentsRouter } from './routes/comments.js';
 
 const app = express();
 
@@ -45,6 +46,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 app.use('/api/redirect', redirectsRouter);
+
+app.use('/api/articles', commentsRouter);
 
 app.use('/api/articles', articlesRouter);
 app.use('/api/articles', articlesSearchRouter);
