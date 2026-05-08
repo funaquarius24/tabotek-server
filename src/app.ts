@@ -32,7 +32,9 @@ const app = express();
 const allowedOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000,https://www.techteg.com').split(',').map(s => s.trim().toLowerCase());
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin.toLowerCase()) || allowedOrigins.includes('*')) {
+    const allowed = !origin || allowedOrigins.includes(origin.toLowerCase()) || allowedOrigins.includes('*');
+    console.log(`[CORS] origin=${origin} allowed=${allowed} | allowedOrigins=${allowedOrigins.join(',')}`);
+    if (allowed) {
       callback(null, true);
     } else {
       callback(null, false);
@@ -44,6 +46,11 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
+
+app.use((req, _res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.path} | origin=${req.headers.origin} | cookieHeader=${(req.headers.cookie || '').substring(0, 80)} | parsedCookies=${JSON.stringify(req.cookies)}`);
+  next();
+});
 
 app.use('/api/redirect', redirectsRouter);
 
