@@ -26,7 +26,7 @@ import { userSettingsRouter } from './routes/user-settings.js';
 import { usersRouter } from './routes/users.js';
 import { redirectsRouter } from './routes/redirects.js';
 import { commentsRouter } from './routes/comments.js';
-import { log, getLog } from '../lib/debug-log.js';
+import { log, getLog, clearLog } from '../lib/debug-log.js';
 
 const app = express();
 
@@ -59,6 +59,7 @@ app.use((_req, res, next) => {
     if (res.statusCode >= 400) {
       body = { ...body, _debug: getLog() };
     }
+    clearLog();
     return originalJson(body);
   } as any;
   next();
