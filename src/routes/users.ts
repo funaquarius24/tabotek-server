@@ -3,16 +3,17 @@ import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { canAccessAdmin, ROLE_LEVELS, UserRole } from '../../lib/roles.js';
 import bcrypt from 'bcryptjs';
+import { log } from '../../lib/debug-log.js';
 
 export const usersRouter = Router();
 
 async function getAuthUser(req: Request): Promise<{ _id: ObjectId; role: UserRole; userId: string } | null> {
   const rawCookie = req.headers.cookie;
   const userId = req.cookies?.user_id;
-  console.log(`[getAuthUser] raw cookie header: ${rawCookie?.substring(0, 60)}`);
-  console.log(`[getAuthUser] parsed user_id: ${userId}, valid ObjectId: ${userId ? ObjectId.isValid(userId) : 'N/A'}`);
+  log(`[getAuthUser] raw cookie header: ${rawCookie?.substring(0, 60)}`);
+  log(`[getAuthUser] parsed user_id: ${userId}, valid ObjectId: ${userId ? ObjectId.isValid(userId) : 'N/A'}`);
   if (!userId || !ObjectId.isValid(userId)) {
-    console.log(`[getAuthUser] FAIL: userId missing or invalid (exists=${!!userId}, valid=${userId ? ObjectId.isValid(userId) : 'N/A'})`);
+    log(`[getAuthUser] FAIL: userId missing or invalid (exists=${!!userId}, valid=${userId ? ObjectId.isValid(userId) : 'N/A'})`);
     return null;
   }
   const { db } = await connectToDatabase();
@@ -20,18 +21,18 @@ async function getAuthUser(req: Request): Promise<{ _id: ObjectId; role: UserRol
     { _id: new ObjectId(userId) },
     { projection: { role: 1, _id: 1 } }
   );
-  console.log(`[getAuthUser] DB user lookup: found=${!!user}, role=${user?.role}`);
+  log(`[getAuthUser] DB user lookup: found=${!!user}, role=${user?.role}`);
   if (!user) {
-    console.log(`[getAuthUser] FAIL: user not found in DB for _id=${userId}`);
+    log(`[getAuthUser] FAIL: user not found in DB for _id=${userId}`);
     return null;
   }
   const adminAccess = canAccessAdmin(user.role);
-  console.log(`[getAuthUser] canAccessAdmin(${user.role}) => ${adminAccess}`);
+  log(`[getAuthUser] canAccessAdmin(${user.role}) => ${adminAccess}`);
   if (!adminAccess) {
-    console.log(`[getAuthUser] FAIL: user role ${user.role} does not have admin access`);
+    log(`[getAuthUser] FAIL: user role ${user.role} does not have admin access`);
     return null;
   }
-  console.log(`[getAuthUser] SUCCESS: userId=${user._id.toString()}, role=${user.role}`);
+  log(`[getAuthUser] SUCCESS: userId=${user._id.toString()}, role=${user.role}`);
   return { _id: user._id, role: user.role, userId: user._id.toString() };
 }
 

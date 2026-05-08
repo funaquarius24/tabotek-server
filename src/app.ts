@@ -26,6 +26,7 @@ import { userSettingsRouter } from './routes/user-settings.js';
 import { usersRouter } from './routes/users.js';
 import { redirectsRouter } from './routes/redirects.js';
 import { commentsRouter } from './routes/comments.js';
+import { log, getLog } from '../lib/debug-log.js';
 
 const app = express();
 
@@ -33,7 +34,7 @@ const allowedOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || 'h
 app.use(cors({
   origin(origin, callback) {
     const allowed = !origin || allowedOrigins.includes(origin.toLowerCase()) || allowedOrigins.includes('*');
-    console.log(`[CORS] origin=${origin} allowed=${allowed} | allowedOrigins=${allowedOrigins.join(',')}`);
+    log(`[CORS] origin=${origin} allowed=${allowed} | allowedOrigins=${allowedOrigins.join(',')}`);
     if (allowed) {
       callback(null, true);
     } else {
@@ -48,7 +49,18 @@ app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 app.use((req, _res, next) => {
-  console.log(`[REQUEST] ${req.method} ${req.path} | origin=${req.headers.origin} | cookieHeader=${(req.headers.cookie || '').substring(0, 80)} | parsedCookies=${JSON.stringify(req.cookies)}`);
+  log(`[REQUEST] ${req.method} ${req.path} | origin=${req.headers.origin} | cookieHeader=${(req.headers.cookie || '').substring(0, 80)} | parsedCookies=${JSON.stringify(req.cookies)}`);
+  next();
+});
+
+app.use((_req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = function (body: any) {
+    if (res.statusCode >= 400) {
+      body = { ...body, _debug: getLog() };
+    }
+    return originalJson(body);
+  } as any;
   next();
 });
 
