@@ -73,10 +73,11 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
       return;
     }
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('user_id', user._id.toString(), {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: true,
+      sameSite: 'none',
       maxAge: 60 * 60 * 24 * 7 * 1000 // 7 days in ms
     });
 
@@ -153,8 +154,8 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
 authRouter.post('/signout', async (_req: Request, res: Response) => {
   res.clearCookie('user_id', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: true,
+    sameSite: 'none',
   });
   res.json({ success: true });
 });
