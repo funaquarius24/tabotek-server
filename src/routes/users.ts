@@ -43,10 +43,33 @@ usersRouter.get('/', async (req: Request, res: Response) => {
 
     const { db } = await connectToDatabase();
 
+    const search = req.query.search as string | undefined;
+    const role = req.query.role as string | undefined;
+    const page = parseInt(req.query.page as string || '1');
+    const limit = parseInt(req.query.limit as string || '20');
+    const sortField = (req.query.sort as string) || 'createdAt';
+    const sortOrder = (req.query.order as string) === 'asc' ? 1 : -1;
+
+    let query: any = {};
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    if (role) {
+      query.role = role;
+    }
+
+    const total = await db.collection('users').countDocuments(query);
     const users = await db
       .collection('users')
-      .find({}, { projection: { passwordHash: 0 } })
-      .sort({ createdAt: -1 })
+      .find(query, { projection: { passwordHash: 0 } })
+      .sort({ [sortField]: sortOrder })
+      .skip((page - 1) * limit)
+      .limit(limit)
       .toArray();
 
     const usersWithStringIds = users.map(user => ({
@@ -56,7 +79,10 @@ usersRouter.get('/', async (req: Request, res: Response) => {
       updatedAt: user.updatedAt?.toISOString(),
     }));
 
-    res.json({ users: usersWithStringIds });
+    res.json({
+      users: usersWithStringIds,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });

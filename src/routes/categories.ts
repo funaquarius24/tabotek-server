@@ -11,6 +11,11 @@ categoriesRouter.get('/', async (req: Request, res: Response) => {
 
     const featured = req.query.featured as string | undefined;
     const parent = req.query.parent as string | undefined;
+    const search = req.query.search as string | undefined;
+    const page = parseInt(req.query.page as string || '1');
+    const limit = parseInt(req.query.limit as string || '20');
+    const sortField = (req.query.sort as string) || 'name';
+    const sortOrder = (req.query.order as string) === 'desc' ? -1 : 1;
 
     let query: any = {};
 
@@ -26,10 +31,21 @@ categoriesRouter.get('/', async (req: Request, res: Response) => {
       }
     }
 
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { slug: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const total = await db.collection('categories').countDocuments(query);
     const categories = await db
       .collection('categories')
       .find(query)
-      .sort({ name: 1 })
+      .sort({ [sortField]: sortOrder })
+      .skip((page - 1) * limit)
+      .limit(limit)
       .toArray();
 
     const categoriesWithStringIds = categories.map(category => ({
@@ -40,7 +56,10 @@ categoriesRouter.get('/', async (req: Request, res: Response) => {
       updatedAt: category.updatedAt?.toISOString()
     }));
 
-    res.json({ categories: categoriesWithStringIds });
+    res.json({
+      categories: categoriesWithStringIds,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error('Error fetching categories:', error);
     res.status(500).json({ error: 'Failed to fetch categories' });

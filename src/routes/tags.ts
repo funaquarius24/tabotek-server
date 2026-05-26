@@ -23,14 +23,32 @@ async function requireAdmin(req: Request, res: Response): Promise<boolean> {
   return true;
 }
 
-tagsRouter.get('/', async (_req: Request, res: Response) => {
+tagsRouter.get('/', async (req: Request, res: Response) => {
   try {
     const { db } = await connectToDatabase();
 
+    const search = req.query.search as string | undefined;
+    const page = parseInt(req.query.page as string || '1');
+    const limit = parseInt(req.query.limit as string || '20');
+    const sortField = (req.query.sort as string) || 'name';
+    const sortOrder = (req.query.order as string) === 'desc' ? -1 : 1;
+
+    let query: any = {};
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { slug: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const total = await db.collection('tags').countDocuments(query);
     const tags = await db
       .collection('tags')
-      .find({})
-      .sort({ name: 1 })
+      .find(query)
+      .sort({ [sortField]: sortOrder })
+      .skip((page - 1) * limit)
+      .limit(limit)
       .toArray();
 
     const tagsWithStringIds = tags.map(tag => ({
@@ -40,7 +58,10 @@ tagsRouter.get('/', async (_req: Request, res: Response) => {
       updatedAt: tag.updatedAt?.toISOString()
     }));
 
-    res.json({ tags: tagsWithStringIds });
+    res.json({
+      tags: tagsWithStringIds,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error('Error fetching tags:', error);
     res.status(500).json({ error: 'Failed to fetch tags' });

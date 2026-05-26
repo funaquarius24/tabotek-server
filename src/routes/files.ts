@@ -12,6 +12,7 @@ filesRouter.get('/', async (req: Request, res: Response) => {
     const page = parseInt(req.query.page as string || '1');
     const limit = parseInt(req.query.limit as string || '20');
     const type = req.query.type as string | undefined;
+    const search = req.query.search as string | undefined;
 
     let query: any = {};
 
@@ -23,6 +24,10 @@ filesRouter.get('/', async (req: Request, res: Response) => {
       } else if (type === 'document') {
         query.type = { $regex: '^(application|text)/' };
       }
+    }
+
+    if (search) {
+      query.originalname = { $regex: search, $options: 'i' };
     }
 
     const total = await db.collection('files').countDocuments(query);

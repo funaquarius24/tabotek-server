@@ -29,24 +29,40 @@ adminStatsRouter.get('/stats', async (req: Request, res: Response) => {
     const [
       totalArticles,
       publishedArticles,
+      draftArticles,
+      archivedArticles,
       totalCategories,
       totalUsers,
-      totalTags
+      totalTags,
+      superusers,
+      admins,
+      editors,
+      authors,
+      users
     ] = await Promise.all([
       db.collection('articles').countDocuments(),
       db.collection('articles').countDocuments({ status: 'published' }),
+      db.collection('articles').countDocuments({ status: 'draft' }),
+      db.collection('articles').countDocuments({ status: 'archived' }),
       db.collection('categories').countDocuments(),
       db.collection('users').countDocuments(),
-      db.collection('tags').countDocuments()
+      db.collection('tags').countDocuments(),
+      db.collection('users').countDocuments({ role: 'superuser' }),
+      db.collection('users').countDocuments({ role: 'admin' }),
+      db.collection('users').countDocuments({ role: 'editor' }),
+      db.collection('users').countDocuments({ role: 'author' }),
+      db.collection('users').countDocuments({ role: 'user' }),
     ]);
 
     res.json({
       totalArticles,
       publishedArticles,
-      draftArticles: totalArticles - publishedArticles,
+      draftArticles,
+      archivedArticles,
       totalCategories,
       totalUsers,
-      totalTags
+      totalTags,
+      roleCounts: { superuser: superusers, admin: admins, editor: editors, author: authors, user: users },
     });
   } catch (error) {
     console.error('Error fetching admin stats:', error);

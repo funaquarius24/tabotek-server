@@ -21,12 +21,36 @@ adminAuthorRequestsRouter.get('/author-requests', async (req: Request, res: Resp
       return;
     }
 
+    const search = req.query.search as string | undefined;
+    const statusFilter = req.query.status as string | undefined;
+    const page = parseInt(req.query.page as string || '1');
+    const limit = parseInt(req.query.limit as string || '20');
+
+    let query: any = {};
+
+    if (statusFilter) {
+      query.status = statusFilter;
+    }
+
+    if (search) {
+      query.$or = [
+        { userName: { $regex: search, $options: 'i' } },
+        { userEmail: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const total = await db.collection('authorRequests').countDocuments(query);
     const requests = await db.collection('authorRequests')
-      .find({})
+      .find(query)
       .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
       .toArray();
 
-    res.json({ requests });
+    res.json({
+      requests,
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error('Error fetching author requests:', error);
     res.status(500).json({ error: 'Failed to fetch requests' });
