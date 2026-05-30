@@ -29,7 +29,7 @@ import { userSettingsRouter } from './routes/user-settings.js';
 import { usersRouter } from './routes/users.js';
 import { redirectsRouter } from './routes/redirects.js';
 import { commentsRouter } from './routes/comments.js';
-import { authorCommentsRouter } from './routes/author-comments.js';
+import { authorRouter } from './routes/author-comments.js';
 import { log, getLog, clearLog } from '../lib/debug-log.js';
 
 const app = express();
@@ -87,7 +87,7 @@ app.use('/api/admin', adminAuthorRequestsRouter);
 app.use('/api/admin', adminRecentActivityRouter);
 app.use('/api/admin', backupRouter);
 app.use('/api/admin', siteSettingsRouter);
-app.use('/api/author', authorCommentsRouter);
+app.use('/api/author', authorRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/files', filesUploadRouter);
 app.use('/api/oss', ossUploadUrlRouter);
