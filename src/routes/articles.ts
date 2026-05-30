@@ -13,11 +13,16 @@ articlesRouter.get('/', async (req: Request, res: Response) => {
     const category = req.query.category as string | undefined;
     const status = (req.query.status as string) || 'published';
     const search = req.query.search as string | undefined;
+    const authorId = req.query.authorId as string | undefined;
 
     let query: any = {};
 
     if (status) {
       query.status = status;
+    }
+
+    if (authorId && ObjectId.isValid(authorId)) {
+      query.authorId = new ObjectId(authorId);
     }
 
     if (category) {
