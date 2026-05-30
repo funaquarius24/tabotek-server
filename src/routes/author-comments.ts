@@ -39,7 +39,9 @@ authorRouter.get('/articles', async (req: Request, res: Response) => {
     const sortField = ['title', 'status', 'publishedAt'].includes(sortBy) ? sortBy : 'publishedAt';
     const sortDir = sortOrder === 1 ? 1 : -1;
 
-    const [total, articles] = await Promise.all([
+    const authorBaseQuery = { authorId: new ObjectId(userId) };
+
+    const [total, articles, totalAll, totalPublished, totalDraft, totalArchived] = await Promise.all([
       db.collection('articles').countDocuments(query),
       db.collection('articles')
         .find(query)
@@ -47,6 +49,10 @@ authorRouter.get('/articles', async (req: Request, res: Response) => {
         .skip((page - 1) * limit)
         .limit(limit)
         .toArray(),
+      db.collection('articles').countDocuments({ ...authorBaseQuery }),
+      db.collection('articles').countDocuments({ ...authorBaseQuery, status: 'published' }),
+      db.collection('articles').countDocuments({ ...authorBaseQuery, status: 'draft' }),
+      db.collection('articles').countDocuments({ ...authorBaseQuery, status: 'archived' }),
     ]);
 
     res.json({
@@ -60,6 +66,12 @@ authorRouter.get('/articles', async (req: Request, res: Response) => {
         updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt,
       })),
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      counts: {
+        '': totalAll,
+        published: totalPublished,
+        draft: totalDraft,
+        archived: totalArchived,
+      },
     });
   } catch (error) {
     console.error('Error fetching author articles:', error);
