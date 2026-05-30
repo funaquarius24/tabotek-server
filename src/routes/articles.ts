@@ -109,8 +109,13 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
 
     const body = req.body;
 
-    if (!body.slug || !body.title || !body.content || !body.categoryId) {
+    if (!body.slug || !body.title || !body.content) {
       res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+
+    if (body.status === 'published' && !body.categoryId) {
+      res.status(400).json({ error: 'Category is required for published articles' });
       return;
     }
 
@@ -127,9 +132,8 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
     }
 
     const now = new Date();
-    const article = {
+    const article: Record<string, unknown> = {
       ...body,
-      categoryId: new ObjectId(body.categoryId),
       authorId: new ObjectId(userId),
       publishedAt: body.publishedAt ? new Date(body.publishedAt) : now,
       views: 0,
@@ -139,12 +143,16 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
       updatedAt: now
     };
 
+    if (body.categoryId) {
+      article.categoryId = new ObjectId(body.categoryId);
+    }
+
     const result = await db.collection('articles').insertOne(article);
 
     res.status(201).json({
       ...article,
       _id: result.insertedId.toString(),
-      categoryId: article.categoryId.toString(),
+      categoryId: article.categoryId?.toString(),
       authorId: article.authorId.toString(),
       publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
       createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
