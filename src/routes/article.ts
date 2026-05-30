@@ -67,13 +67,16 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
     const { db } = await connectToDatabase();
     const body = req.body;
 
-    const existingArticle = await db.collection('articles').findOne({ slug });
+    const slugQuery = ObjectId.isValid(slug)
+      ? { $or: [{ _id: new ObjectId(slug) }, { slug }] }
+      : { slug };
+    const existingArticle = await db.collection('articles').findOne(slugQuery);
     if (!existingArticle) {
       res.status(404).json({ error: 'Article not found' });
       return;
     }
 
-    if (body.slug && body.slug !== slug) {
+    if (body.slug && body.slug !== existingArticle.slug) {
       const slugConflict = await db.collection('articles').findOne({ slug: body.slug });
       if (slugConflict) {
         res.status(409).json({ error: 'Article with this slug already exists' });
@@ -103,7 +106,7 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
     updateData.updatedAt = new Date();
 
     const result = await db.collection('articles').updateOne(
-      { slug },
+      { _id: existingArticle._id },
       { $set: updateData }
     );
 
@@ -112,7 +115,7 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
       return;
     }
 
-    const updatedArticle = await db.collection('articles').findOne({ slug: body.slug || slug });
+    const updatedArticle = await db.collection('articles').findOne({ _id: existingArticle._id });
 
     const articleWithStringIds = {
       ...updatedArticle,
