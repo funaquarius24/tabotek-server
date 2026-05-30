@@ -146,9 +146,9 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
       _id: result.insertedId.toString(),
       categoryId: article.categoryId.toString(),
       authorId: article.authorId.toString(),
-      publishedAt: article.publishedAt.toISOString(),
-      createdAt: article.createdAt.toISOString(),
-      updatedAt: article.updatedAt.toISOString()
+      publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
+      createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
+      updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
     });
   } catch (error) {
     console.error('Error creating article:', error);

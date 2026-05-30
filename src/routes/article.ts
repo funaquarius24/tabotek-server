@@ -43,9 +43,9 @@ articleRouter.get('/:slug', async (req: Request, res: Response) => {
       _id: article._id.toString(),
       categoryId: article.categoryId?.toString(),
       authorId: article.authorId?.toString(),
-      publishedAt: article.publishedAt.toISOString(),
-      createdAt: article.createdAt?.toISOString(),
-      updatedAt: article.updatedAt?.toISOString()
+      publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
+      createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
+      updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
     };
 
     res.json(articleWithStringIds);
@@ -122,9 +122,9 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
       _id: updatedArticle!._id.toString(),
       categoryId: updatedArticle!.categoryId?.toString(),
       authorId: updatedArticle!.authorId?.toString(),
-      publishedAt: updatedArticle!.publishedAt.toISOString(),
-      createdAt: updatedArticle!.createdAt?.toISOString(),
-      updatedAt: updatedArticle!.updatedAt?.toISOString()
+      publishedAt: updatedArticle!.publishedAt?.toISOString?.() ?? updatedArticle!.publishedAt,
+      createdAt: updatedArticle!.createdAt?.toISOString?.() ?? updatedArticle!.createdAt,
+      updatedAt: updatedArticle!.updatedAt?.toISOString?.() ?? updatedArticle!.updatedAt
     };
 
     res.json(articleWithStringIds);
@@ -181,9 +181,9 @@ articleRouter.post('/:slug/vote', async (req: Request, res: Response) => {
       _id: updatedArticle!._id.toString(),
       categoryId: updatedArticle!.categoryId?.toString(),
       authorId: updatedArticle!.authorId?.toString(),
-      publishedAt: updatedArticle!.publishedAt.toISOString(),
-      createdAt: updatedArticle!.createdAt?.toISOString(),
-      updatedAt: updatedArticle!.updatedAt?.toISOString(),
+      publishedAt: updatedArticle!.publishedAt?.toISOString?.() ?? updatedArticle!.publishedAt,
+      createdAt: updatedArticle!.createdAt?.toISOString?.() ?? updatedArticle!.createdAt,
+      updatedAt: updatedArticle!.updatedAt?.toISOString?.() ?? updatedArticle!.updatedAt,
     });
   } catch (error) {
     console.error('Error voting on article:', error);

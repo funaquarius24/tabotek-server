@@ -43,9 +43,9 @@ articlesSearchRouter.get('/search', async (req: Request, res: Response) => {
       _id: article._id.toString(),
       categoryId: article.categoryId?.toString(),
       authorId: article.authorId?.toString(),
-      publishedAt: article.publishedAt.toISOString(),
-      createdAt: article.createdAt?.toISOString(),
-      updatedAt: article.updatedAt?.toISOString()
+      publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
+      createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
+      updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
     }));
 
     res.json({
