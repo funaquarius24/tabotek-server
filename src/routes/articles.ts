@@ -71,11 +71,21 @@ articlesRouter.get('/', async (req: Request, res: Response) => {
       articles = [...articles, ...shuffledRandom].slice(0, limit);
     }
 
+    const authorIds = [...new Set(articles.filter(a => a.authorId).map(a => a.authorId.toString()))];
+    const authors = authorIds.length
+      ? await db.collection('users').find(
+          { _id: { $in: authorIds.map(id => new ObjectId(id)) } },
+          { projection: { _id: 1, name: 1 } }
+        ).toArray()
+      : [];
+    const authorMap = new Map(authors.map(a => [a._id.toString(), { _id: a._id.toString(), name: a.name }]));
+
     const articlesWithStringIds = articles.map(article => ({
       ...article,
       _id: article._id.toString(),
       categoryId: article.categoryId?.toString(),
       authorId: article.authorId?.toString(),
+      author: authorMap.get(article.authorId?.toString()) || null,
       publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
       createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
       updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
