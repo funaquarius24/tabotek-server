@@ -99,7 +99,9 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
       updateData.authorId = new ObjectId(body.authorId);
     }
 
-    if (body.publishedAt) {
+    if (body.status === 'published' && !existingArticle.publishedAt) {
+      updateData.publishedAt = new Date();
+    } else if (body.publishedAt) {
       updateData.publishedAt = new Date(body.publishedAt);
     }
 
