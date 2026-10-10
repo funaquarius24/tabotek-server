@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { connectToDatabase } from '../../lib/mongodb.js';
-import { saveFile } from '../../lib/upload.js';
+import { storeObject } from '../../lib/storage.js';
 export const filesUploadRouter = Router();
 filesUploadRouter.post('/upload', async (req, res) => {
     try {
-        const { file: base64Data, filename, type: mimeType, unique } = req.body;
+        const { file: base64Data, filename, type: mimeType } = req.body;
         if (!base64Data || !filename) {
             res.status(400).json({ error: 'No file provided' });
             return;
@@ -39,22 +38,8 @@ filesUploadRouter.post('/upload', async (req, res) => {
             res.status(400).json({ error: 'File too large (max 10MB)' });
             return;
         }
-        const result = saveFile(buffer, filename, effectiveMimeType, buffer.length, unique || 0);
-        const { db } = await connectToDatabase();
-        const doc = {
-            originalname: result.originalname,
-            filename: result.filename,
-            url: result.url,
-            type: result.mimetype,
-            size: result.size,
-            createdAt: new Date(),
-        };
-        const insertResult = await db.collection('files').insertOne(doc);
-        res.status(201).json({
-            _id: insertResult.insertedId.toString(),
-            ...doc,
-            createdAt: doc.createdAt.toISOString(),
-        });
+        const result = await storeObject(buffer, filename, effectiveMimeType, buffer.length);
+        res.status(201).json(result);
     }
     catch (error) {
         console.error('Upload error:', error);

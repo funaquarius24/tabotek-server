@@ -10,9 +10,13 @@ articlesRouter.get('/', async (req, res) => {
         const category = req.query.category;
         const status = req.query.status || 'published';
         const search = req.query.search;
+        const authorId = req.query.authorId;
         let query = {};
         if (status) {
             query.status = status;
+        }
+        if (authorId && ObjectId.isValid(authorId)) {
+            query.authorId = new ObjectId(authorId);
         }
         if (category) {
             if (ObjectId.isValid(category)) {
@@ -55,14 +59,20 @@ articlesRouter.get('/', async (req, res) => {
             const shuffledRandom = randomArticles.sort(() => Math.random() - 0.5);
             articles = [...articles, ...shuffledRandom].slice(0, limit);
         }
+        const authorIds = [...new Set(articles.filter(a => a.authorId).map(a => a.authorId.toString()))];
+        const authors = authorIds.length
+            ? await db.collection('users').find({ _id: { $in: authorIds.map(id => new ObjectId(id)) } }, { projection: { _id: 1, name: 1 } }).toArray()
+            : [];
+        const authorMap = new Map(authors.map(a => [a._id.toString(), { _id: a._id.toString(), name: a.name }]));
         const articlesWithStringIds = articles.map(article => ({
             ...article,
             _id: article._id.toString(),
             categoryId: article.categoryId?.toString(),
             authorId: article.authorId?.toString(),
-            publishedAt: article.publishedAt.toISOString(),
-            createdAt: article.createdAt?.toISOString(),
-            updatedAt: article.updatedAt?.toISOString()
+            author: authorMap.get(article.authorId?.toString()) || null,
+            publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
+            createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
+            updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
         }));
         res.json({
             articles: articlesWithStringIds,
@@ -93,8 +103,12 @@ articlesRouter.post('/', async (req, res) => {
             return;
         }
         const body = req.body;
-        if (!body.slug || !body.title || !body.content || !body.categoryId) {
+        if (!body.slug || !body.title || !body.content) {
             res.status(400).json({ error: 'Missing required fields' });
+            return;
+        }
+        if (body.status === 'published' && !body.categoryId) {
+            res.status(400).json({ error: 'Category is required for published articles' });
             return;
         }
         const existingArticle = await db.collection('articles').findOne({ slug: body.slug });
@@ -110,7 +124,6 @@ articlesRouter.post('/', async (req, res) => {
         const now = new Date();
         const article = {
             ...body,
-            categoryId: new ObjectId(body.categoryId),
             authorId: new ObjectId(userId),
             publishedAt: body.publishedAt ? new Date(body.publishedAt) : now,
             views: 0,
@@ -119,15 +132,18 @@ articlesRouter.post('/', async (req, res) => {
             createdAt: now,
             updatedAt: now
         };
+        if (body.categoryId) {
+            article.categoryId = new ObjectId(body.categoryId);
+        }
         const result = await db.collection('articles').insertOne(article);
         res.status(201).json({
             ...article,
             _id: result.insertedId.toString(),
-            categoryId: article.categoryId.toString(),
+            categoryId: article.categoryId?.toString(),
             authorId: article.authorId.toString(),
-            publishedAt: article.publishedAt.toISOString(),
-            createdAt: article.createdAt.toISOString(),
-            updatedAt: article.updatedAt.toISOString()
+            publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
+            createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
+            updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
         });
     }
     catch (error) {

@@ -1,18 +1,38 @@
 import { Router } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { canAccessAdmin } from '../../lib/roles.js';
 export const categoryRouter = Router();
+async function requireAdmin(req, res) {
+    const userId = req.cookies?.user_id;
+    if (!userId || !ObjectId.isValid(userId)) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return false;
+    }
+    const { db } = await connectToDatabase();
+    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) }, { projection: { role: 1 } });
+    if (!user || !canAccessAdmin(user.role)) {
+        res.status(403).json({ error: 'Forbidden: admin access required' });
+        return false;
+    }
+    return true;
+}
+async function resolveCategoryQuery(id) {
+    if (ObjectId.isValid(id)) {
+        const oid = new ObjectId(id);
+        return { query: { _id: oid }, isObjectId: true, categoryId: oid };
+    }
+    const { db } = await connectToDatabase();
+    const cat = await db.collection('categories').findOne({ slug: id }, { projection: { _id: 1 } });
+    if (!cat)
+        return { query: { slug: id }, isObjectId: false };
+    return { query: { slug: id }, isObjectId: false, categoryId: cat._id };
+}
 categoryRouter.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { db } = await connectToDatabase();
-        let query;
-        if (ObjectId.isValid(id)) {
-            query = { _id: new ObjectId(id) };
-        }
-        else {
-            query = { slug: id };
-        }
+        const { query } = await resolveCategoryQuery(id);
         const category = await db.collection('categories').findOne(query);
         if (!category) {
             res.status(404).json({ error: 'Category not found' });
@@ -34,18 +54,12 @@ categoryRouter.get('/:id', async (req, res) => {
 });
 categoryRouter.put('/:id', async (req, res) => {
     try {
+        if (!(await requireAdmin(req, res)))
+            return;
         const { id } = req.params;
         const { db } = await connectToDatabase();
         const body = req.body;
-        let query;
-        let isObjectId = false;
-        if (ObjectId.isValid(id)) {
-            query = { _id: new ObjectId(id) };
-            isObjectId = true;
-        }
-        else {
-            query = { slug: id };
-        }
+        const { query, isObjectId, categoryId } = await resolveCategoryQuery(id);
         const existingCategory = await db.collection('categories').findOne(query);
         if (!existingCategory) {
             res.status(404).json({ error: 'Category not found' });
@@ -57,17 +71,19 @@ categoryRouter.put('/:id', async (req, res) => {
                 res.status(409).json({ error: 'Category with this slug already exists' });
                 return;
             }
+            await db.collection('redirects').insertOne({
+                from: `/category/${existingCategory.slug}`,
+                to: `/category/${body.slug}`,
+                statusCode: 301,
+                createdAt: new Date(),
+            });
         }
         const updateData = { ...body };
         if (body.parentCategory !== undefined) {
             updateData.parentCategory = body.parentCategory ? new ObjectId(body.parentCategory) : null;
         }
         updateData.updatedAt = new Date();
-        const result = await db.collection('categories').updateOne(query, { $set: updateData });
-        if (result.modifiedCount === 0) {
-            res.status(400).json({ error: 'Category not updated' });
-            return;
-        }
+        await db.collection('categories').updateOne(query, { $set: updateData });
         const updatedQuery = isObjectId ? { _id: new ObjectId(id) } : { slug: body.slug || id };
         const updatedCategory = await db.collection('categories').findOne(updatedQuery);
         const categoryWithStringIds = {
@@ -86,26 +102,27 @@ categoryRouter.put('/:id', async (req, res) => {
 });
 categoryRouter.delete('/:id', async (req, res) => {
     try {
+        if (!(await requireAdmin(req, res)))
+            return;
         const { id } = req.params;
         const { db } = await connectToDatabase();
-        let query;
-        if (ObjectId.isValid(id)) {
-            query = { _id: new ObjectId(id) };
+        const { query, categoryId } = await resolveCategoryQuery(id);
+        if (!categoryId && !ObjectId.isValid(id)) {
+            res.status(404).json({ error: 'Category not found' });
+            return;
         }
-        else {
-            query = { slug: id };
-        }
-        const childCategories = await db.collection('categories').countDocuments({ parentCategory: query._id || new ObjectId(id) });
+        const resolvedId = categoryId || new ObjectId(id);
+        const childCategories = await db.collection('categories').countDocuments({ parentCategory: resolvedId });
         if (childCategories > 0) {
             res.status(400).json({ error: 'Cannot delete category with child categories' });
             return;
         }
-        const articlesCount = await db.collection('articles').countDocuments({ categoryId: query._id || new ObjectId(id) });
+        const articlesCount = await db.collection('articles').countDocuments({ categoryId: resolvedId });
         if (articlesCount > 0) {
             res.status(400).json({ error: 'Cannot delete category with associated articles' });
             return;
         }
-        const result = await db.collection('categories').deleteOne(query);
+        const result = await db.collection('categories').deleteOne({ _id: resolvedId });
         if (result.deletedCount === 0) {
             res.status(404).json({ error: 'Category not found' });
             return;

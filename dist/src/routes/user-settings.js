@@ -12,7 +12,7 @@ userSettingsRouter.get('/settings', async (req, res) => {
     try {
         const userId = req.cookies?.user_id;
         if (!userId || !ObjectId.isValid(userId)) {
-            res.status(401).json({ error: 'Not authenticated' });
+            res.json({ settings: DEFAULT_USER_SETTINGS });
             return;
         }
         const { db } = await connectToDatabase();

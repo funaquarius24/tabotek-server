@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
-import { canAccessAdmin } from '../../lib/roles.js';
+import { canAccessAdmin, UserRole } from '../../lib/roles.js';
 import showdown from 'showdown';
 import { sendMail, buildCommentReplyHtml, buildNewCommentHtml } from '../../lib/mail.js';
 
@@ -55,7 +55,7 @@ async function getArticleAuthor(db: any, articleSlug: string) {
   return article;
 }
 
-async function isArticleAuthorOrAdmin(db: any, articleSlug: string, userId: string, userRole: string): Promise<boolean> {
+async function isArticleAuthorOrAdmin(db: any, articleSlug: string, userId: string, userRole: UserRole): Promise<boolean> {
   if (canAccessAdmin(userRole)) return true;
   const article = await db.collection('articles').findOne({ slug: articleSlug }, { projection: { authorId: 1 } });
   return article?.authorId?.toString() === userId;

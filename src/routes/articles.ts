@@ -147,7 +147,7 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
     }
 
     const now = new Date();
-    const article: Record<string, unknown> = {
+    const article: Record<string, any> = {
       ...body,
       authorId: new ObjectId(userId),
       publishedAt: body.publishedAt ? new Date(body.publishedAt) : now,

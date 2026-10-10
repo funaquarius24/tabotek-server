@@ -12,6 +12,7 @@ const DEFAULT_SITE_SETTINGS: Record<string, unknown> = {
   contactEmail: '',
   maintenanceMode: false,
   primaryColor: 'blue',
+  storageBackend: 'database',
 };
 
 async function requireAdmin(req: Request, res: Response): Promise<boolean> {

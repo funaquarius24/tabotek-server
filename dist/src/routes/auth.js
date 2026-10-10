@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { signUrl, getOssEndpoint } from '../../lib/oss.js';
+import { sendMail, buildVerifyEmailHtml } from '../../lib/mail.js';
 export const authRouter = Router();
 const BCRYPT_ROUNDS = 12;
 const AVATAR_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -41,20 +43,25 @@ authRouter.post('/signin', async (req, res) => {
     try {
         const { email, password } = req.body;
         const { db } = await connectToDatabase();
-        const user = await db.collection('users').findOne({ email: email.toLowerCase() });
+        const user = await db.collection('users').findOne({
+            $or: [
+                { email: email.toLowerCase() },
+                { name: email }
+            ]
+        });
         if (!user) {
-            res.status(401).json({ error: 'Invalid email or password' });
+            res.status(401).json({ error: 'Invalid email/username or password' });
             return;
         }
         const passwordValid = await bcrypt.compare(password, user.passwordHash);
         if (!passwordValid) {
-            res.status(401).json({ error: 'Invalid email or password' });
+            res.status(401).json({ error: 'Invalid email/username or password' });
             return;
         }
         res.cookie('user_id', user._id.toString(), {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax',
             maxAge: 60 * 60 * 24 * 7 * 1000 // 7 days in ms
         });
         res.json({
@@ -91,16 +98,22 @@ authRouter.post('/signup', async (req, res) => {
             return;
         }
         const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+        const verifyToken = randomBytes(32).toString('hex');
+        const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
         const user = {
             email: email.toLowerCase(),
             passwordHash,
             name: name || email.split('@')[0],
             role: 'user',
             avatar: avatarUrl || '',
+            emailVerified: false,
+            verifyToken,
+            verifyExpires,
             createdAt: new Date(),
             updatedAt: new Date()
         };
         const result = await db.collection('users').insertOne(user);
+        sendMail(email, 'Verify your email', buildVerifyEmailHtml(verifyToken));
         res.status(201).json({
             success: true,
             userId: result.insertedId.toString()
@@ -115,7 +128,28 @@ authRouter.post('/signout', async (_req, res) => {
     res.clearCookie('user_id', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: 'lax',
     });
     res.json({ success: true });
+});
+authRouter.post('/verify-email', async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) {
+            res.status(400).json({ error: 'Verification token is required' });
+            return;
+        }
+        const { db } = await connectToDatabase();
+        const user = await db.collection('users').findOne({ verifyToken: token, verifyExpires: { $gt: new Date() } });
+        if (!user) {
+            res.status(400).json({ error: 'Invalid or expired verification token' });
+            return;
+        }
+        await db.collection('users').updateOne({ _id: user._id }, { $set: { emailVerified: true }, $unset: { verifyToken: '', verifyExpires: '' } });
+        res.json({ success: true, message: 'Email verified successfully' });
+    }
+    catch (error) {
+        console.error('Email verification error:', error);
+        res.status(500).json({ error: 'Email verification failed' });
+    }
 });

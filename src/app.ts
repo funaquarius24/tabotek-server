@@ -7,6 +7,7 @@ dotenv.config({ path: '.env.local' });
 import { articlesRouter } from './routes/articles.js';
 import { articleRouter } from './routes/article.js';
 import { articlesSearchRouter } from './routes/articles-search.js';
+import { articlesCountsRouter } from './routes/articles-counts.js';
 import { categoriesRouter } from './routes/categories.js';
 import { categoryRouter } from './routes/category.js';
 import { authRouter } from './routes/auth.js';
@@ -20,6 +21,8 @@ import { backupRouter } from './routes/backup.js';
 import { siteSettingsRouter } from './routes/site-settings.js';
 import { filesRouter } from './routes/files.js';
 import { filesUploadRouter } from './routes/files-upload.js';
+import { storageRouter } from './routes/storage.js';
+import { storageAdminRouter } from './routes/storage-admin.js';
 import { ossUploadUrlRouter } from './routes/oss-upload-url.js';
 import { ossConfirmRouter } from './routes/oss-confirm.js';
 import { ossImageProxyRouter } from './routes/oss-image-proxy.js';
@@ -49,7 +52,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
 app.use((req, _res, next) => {
@@ -75,6 +78,7 @@ app.use('/api/articles', commentsRouter);
 
 app.use('/api/articles', articlesRouter);
 app.use('/api/articles', articlesSearchRouter);
+app.use('/api/articles', articlesCountsRouter);
 app.use('/api/articles', articleRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/categories', categoryRouter);
@@ -87,9 +91,11 @@ app.use('/api/admin', adminAuthorRequestsRouter);
 app.use('/api/admin', adminRecentActivityRouter);
 app.use('/api/admin', backupRouter);
 app.use('/api/admin', siteSettingsRouter);
+app.use('/api/admin', storageAdminRouter);
 app.use('/api/author', authorRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/files', filesUploadRouter);
+app.use('/api/storage', storageRouter);
 app.use('/api/oss', ossUploadUrlRouter);
 app.use('/api/oss', ossConfirmRouter);
 app.use('/api/oss', ossImageProxyRouter);

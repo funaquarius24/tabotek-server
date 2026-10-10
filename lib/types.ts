@@ -175,6 +175,7 @@ export interface FileRecord {
   type: string;
   size: number;
   url: string;
+  storage?: 'database' | 'oss' | 'local';
   createdAt: string;
 }
 

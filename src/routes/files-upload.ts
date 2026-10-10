@@ -1,12 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { connectToDatabase } from '../../lib/mongodb.js';
-import { saveFile } from '../../lib/upload.js';
+import { storeObject } from '../../lib/storage.js';
 
 export const filesUploadRouter = Router();
 
 filesUploadRouter.post('/upload', async (req: Request, res: Response) => {
   try {
-    const { file: base64Data, filename, type: mimeType, unique } = req.body;
+    const { file: base64Data, filename, type: mimeType } = req.body;
 
     if (!base64Data || !filename) {
       res.status(400).json({ error: 'No file provided' });
@@ -48,25 +47,9 @@ filesUploadRouter.post('/upload', async (req: Request, res: Response) => {
       return;
     }
 
-    const result = saveFile(buffer, filename, effectiveMimeType, buffer.length, unique || 0);
+    const result = await storeObject(buffer, filename, effectiveMimeType, buffer.length);
 
-    const { db } = await connectToDatabase();
-    const doc = {
-      originalname: result.originalname,
-      filename: result.filename,
-      url: result.url,
-      type: result.mimetype,
-      size: result.size,
-      createdAt: new Date(),
-    };
-
-    const insertResult = await db.collection('files').insertOne(doc);
-
-    res.status(201).json({
-      _id: insertResult.insertedId.toString(),
-      ...doc,
-      createdAt: doc.createdAt.toISOString(),
-    });
+    res.status(201).json(result);
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Upload failed' });

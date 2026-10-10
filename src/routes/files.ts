@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
-import { deleteFile as removeFileFromDisk } from '../../lib/upload.js';
+import { deleteObject } from '../../lib/storage.js';
 
 export const filesRouter = Router();
 
@@ -33,7 +33,7 @@ filesRouter.get('/', async (req: Request, res: Response) => {
     const total = await db.collection('files').countDocuments(query);
     const files = await db
       .collection('files')
-      .find(query)
+      .find(query, { projection: { data: 0 } })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -77,8 +77,7 @@ filesRouter.delete('/', async (req: Request, res: Response) => {
       return;
     }
 
-    removeFileFromDisk(file.filename);
-    await db.collection('files').deleteOne({ _id: new ObjectId(id) });
+    await deleteObject(file);
 
     res.json({ success: true });
   } catch (error) {

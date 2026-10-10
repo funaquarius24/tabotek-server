@@ -17,7 +17,14 @@ articleRouter.get('/:slug', async (req, res) => {
     try {
         const { slug } = req.params;
         const { db } = await connectToDatabase();
-        const article = await db.collection('articles').findOne({ slug });
+        let query;
+        if (ObjectId.isValid(slug)) {
+            query = { $or: [{ _id: new ObjectId(slug) }, { slug }] };
+        }
+        else {
+            query = { slug };
+        }
+        const article = await db.collection('articles').findOne(query);
         if (!article) {
             res.status(404).json({ error: 'Article not found' });
             return;
@@ -28,9 +35,9 @@ articleRouter.get('/:slug', async (req, res) => {
             _id: article._id.toString(),
             categoryId: article.categoryId?.toString(),
             authorId: article.authorId?.toString(),
-            publishedAt: article.publishedAt.toISOString(),
-            createdAt: article.createdAt?.toISOString(),
-            updatedAt: article.updatedAt?.toISOString()
+            publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
+            createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
+            updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
         };
         res.json(articleWithStringIds);
     }
@@ -49,12 +56,15 @@ articleRouter.put('/:slug', async (req, res) => {
         const { slug } = req.params;
         const { db } = await connectToDatabase();
         const body = req.body;
-        const existingArticle = await db.collection('articles').findOne({ slug });
+        const slugQuery = ObjectId.isValid(slug)
+            ? { $or: [{ _id: new ObjectId(slug) }, { slug }] }
+            : { slug };
+        const existingArticle = await db.collection('articles').findOne(slugQuery);
         if (!existingArticle) {
             res.status(404).json({ error: 'Article not found' });
             return;
         }
-        if (body.slug && body.slug !== slug) {
+        if (body.slug && body.slug !== existingArticle.slug) {
             const slugConflict = await db.collection('articles').findOne({ slug: body.slug });
             if (slugConflict) {
                 res.status(409).json({ error: 'Article with this slug already exists' });
@@ -72,24 +82,27 @@ articleRouter.put('/:slug', async (req, res) => {
         if (body.authorId) {
             updateData.authorId = new ObjectId(body.authorId);
         }
-        if (body.publishedAt) {
+        if (body.status === 'published' && !existingArticle.publishedAt) {
+            updateData.publishedAt = new Date();
+        }
+        else if (body.publishedAt) {
             updateData.publishedAt = new Date(body.publishedAt);
         }
         updateData.updatedAt = new Date();
-        const result = await db.collection('articles').updateOne({ slug }, { $set: updateData });
+        const result = await db.collection('articles').updateOne({ _id: existingArticle._id }, { $set: updateData });
         if (result.modifiedCount === 0) {
             res.status(400).json({ error: 'Article not updated' });
             return;
         }
-        const updatedArticle = await db.collection('articles').findOne({ slug: body.slug || slug });
+        const updatedArticle = await db.collection('articles').findOne({ _id: existingArticle._id });
         const articleWithStringIds = {
             ...updatedArticle,
             _id: updatedArticle._id.toString(),
             categoryId: updatedArticle.categoryId?.toString(),
             authorId: updatedArticle.authorId?.toString(),
-            publishedAt: updatedArticle.publishedAt.toISOString(),
-            createdAt: updatedArticle.createdAt?.toISOString(),
-            updatedAt: updatedArticle.updatedAt?.toISOString()
+            publishedAt: updatedArticle.publishedAt?.toISOString?.() ?? updatedArticle.publishedAt,
+            createdAt: updatedArticle.createdAt?.toISOString?.() ?? updatedArticle.createdAt,
+            updatedAt: updatedArticle.updatedAt?.toISOString?.() ?? updatedArticle.updatedAt
         };
         res.json(articleWithStringIds);
     }
@@ -140,9 +153,9 @@ articleRouter.post('/:slug/vote', async (req, res) => {
             _id: updatedArticle._id.toString(),
             categoryId: updatedArticle.categoryId?.toString(),
             authorId: updatedArticle.authorId?.toString(),
-            publishedAt: updatedArticle.publishedAt.toISOString(),
-            createdAt: updatedArticle.createdAt?.toISOString(),
-            updatedAt: updatedArticle.updatedAt?.toISOString(),
+            publishedAt: updatedArticle.publishedAt?.toISOString?.() ?? updatedArticle.publishedAt,
+            createdAt: updatedArticle.createdAt?.toISOString?.() ?? updatedArticle.createdAt,
+            updatedAt: updatedArticle.updatedAt?.toISOString?.() ?? updatedArticle.updatedAt,
         });
     }
     catch (error) {

@@ -10,6 +10,7 @@ const DEFAULT_SITE_SETTINGS = {
     contactEmail: '',
     maintenanceMode: false,
     primaryColor: 'blue',
+    storageBackend: 'database',
 };
 async function requireAdmin(req, res) {
     const userId = req.cookies?.user_id;

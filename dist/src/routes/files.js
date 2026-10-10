@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
-import { deleteFile as removeFileFromDisk } from '../../lib/upload.js';
+import { deleteObject } from '../../lib/storage.js';
 export const filesRouter = Router();
 filesRouter.get('/', async (req, res) => {
     try {
@@ -9,6 +9,7 @@ filesRouter.get('/', async (req, res) => {
         const page = parseInt(req.query.page || '1');
         const limit = parseInt(req.query.limit || '20');
         const type = req.query.type;
+        const search = req.query.search;
         let query = {};
         if (type) {
             if (type === 'image') {
@@ -21,10 +22,13 @@ filesRouter.get('/', async (req, res) => {
                 query.type = { $regex: '^(application|text)/' };
             }
         }
+        if (search) {
+            query.originalname = { $regex: search, $options: 'i' };
+        }
         const total = await db.collection('files').countDocuments(query);
         const files = await db
             .collection('files')
-            .find(query)
+            .find(query, { projection: { data: 0 } })
             .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
             .limit(limit)
@@ -62,8 +66,7 @@ filesRouter.delete('/', async (req, res) => {
             res.status(404).json({ error: 'File not found' });
             return;
         }
-        removeFileFromDisk(file.filename);
-        await db.collection('files').deleteOne({ _id: new ObjectId(id) });
+        await deleteObject(file);
         res.json({ success: true });
     }
     catch (error) {
