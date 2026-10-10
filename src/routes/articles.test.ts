@@ -27,6 +27,10 @@ describe('Articles List Routes', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       }]);
+      getMockCollection('users').toArray.mockResolvedValue([{
+        _id: new ObjectId(createId()),
+        name: 'Test Author',
+      }]);
 
       const res = await request(app).get('/api/articles/');
       expect(res.status).toBe(200);

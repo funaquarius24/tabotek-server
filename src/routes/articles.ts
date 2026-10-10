@@ -75,10 +75,10 @@ articlesRouter.get('/', async (req: Request, res: Response) => {
     const authors = authorIds.length
       ? await db.collection('users').find(
           { _id: { $in: authorIds.map(id => new ObjectId(id)) } },
-          { projection: { _id: 1, name: 1 } }
+          { projection: { _id: 1, name: 1, username: 1 } }
         ).toArray()
       : [];
-    const authorMap = new Map(authors.map(a => [a._id.toString(), { _id: a._id.toString(), name: a.name }]));
+    const authorMap = new Map(authors.map(a => [a._id.toString(), { _id: a._id.toString(), name: a.name || a.username }]));
 
     const articlesWithStringIds = articles.map(article => ({
       ...article,
@@ -116,7 +116,10 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
 
     const { db } = await connectToDatabase();
 
-    const user = await db.collection('users').findOne({ _id: new ObjectId(userId) }, { projection: { role: 1 } });
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { role: 1, name: 1, username: 1 } }
+    );
     if (!user) {
       res.status(401).json({ error: 'User not found' });
       return;
@@ -150,6 +153,7 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
     const article: Record<string, any> = {
       ...body,
       authorId: new ObjectId(userId),
+      authorName: user.name || user.username || '',
       publishedAt: body.publishedAt ? new Date(body.publishedAt) : now,
       views: 0,
       likes: 0,

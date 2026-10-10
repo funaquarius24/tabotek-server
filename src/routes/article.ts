@@ -4,6 +4,16 @@ import { ObjectId } from 'mongodb';
 
 export const articleRouter = Router();
 
+async function getAuthorInfo(db: any, authorId: any): Promise<{ _id: string; name: string } | null> {
+  if (!authorId || !ObjectId.isValid(authorId)) return null;
+  const user = await db.collection('users').findOne(
+    { _id: new ObjectId(authorId) },
+    { projection: { name: 1, username: 1 } }
+  );
+  if (!user) return null;
+  return { _id: user._id.toString(), name: user.name || user.username || '' };
+}
+
 async function getAuthUser(req: Request) {
   const userId = req.cookies?.user_id;
   if (!userId || !ObjectId.isValid(userId)) return null;
@@ -38,11 +48,15 @@ articleRouter.get('/:slug', async (req: Request, res: Response) => {
       { $inc: { views: 1 } }
     );
 
+    const author = await getAuthorInfo(db, article.authorId);
+
     const articleWithStringIds = {
       ...article,
       _id: article._id.toString(),
       categoryId: article.categoryId?.toString(),
       authorId: article.authorId?.toString(),
+      authorName: article.authorName ?? author?.name ?? '',
+      author,
       publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
       createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
       updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
@@ -96,7 +110,13 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
     }
 
     if (body.authorId) {
-      updateData.authorId = new ObjectId(body.authorId);
+      const newAuthorId = new ObjectId(body.authorId);
+      updateData.authorId = newAuthorId;
+      const authorInfo = await getAuthorInfo(db, newAuthorId);
+      updateData.authorName = authorInfo?.name ?? '';
+    } else {
+      const authorInfo = await getAuthorInfo(db, existingArticle.authorId);
+      updateData.authorName = authorInfo?.name ?? '';
     }
 
     if (body.status === 'published' && !existingArticle.publishedAt) {
@@ -118,12 +138,15 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
     }
 
     const updatedArticle = await db.collection('articles').findOne({ _id: existingArticle._id });
+    const author = await getAuthorInfo(db, updatedArticle!.authorId);
 
     const articleWithStringIds = {
       ...updatedArticle,
       _id: updatedArticle!._id.toString(),
       categoryId: updatedArticle!.categoryId?.toString(),
       authorId: updatedArticle!.authorId?.toString(),
+      authorName: updatedArticle!.authorName ?? author?.name ?? '',
+      author,
       publishedAt: updatedArticle!.publishedAt?.toISOString?.() ?? updatedArticle!.publishedAt,
       createdAt: updatedArticle!.createdAt?.toISOString?.() ?? updatedArticle!.createdAt,
       updatedAt: updatedArticle!.updatedAt?.toISOString?.() ?? updatedArticle!.updatedAt
@@ -178,11 +201,14 @@ articleRouter.post('/:slug/vote', async (req: Request, res: Response) => {
     ]);
 
     const updatedArticle = await db.collection('articles').findOne({ slug });
+    const author = await getAuthorInfo(db, updatedArticle!.authorId);
     res.json({
       ...updatedArticle,
       _id: updatedArticle!._id.toString(),
       categoryId: updatedArticle!.categoryId?.toString(),
       authorId: updatedArticle!.authorId?.toString(),
+      authorName: updatedArticle!.authorName ?? author?.name ?? '',
+      author,
       publishedAt: updatedArticle!.publishedAt?.toISOString?.() ?? updatedArticle!.publishedAt,
       createdAt: updatedArticle!.createdAt?.toISOString?.() ?? updatedArticle!.createdAt,
       updatedAt: updatedArticle!.updatedAt?.toISOString?.() ?? updatedArticle!.updatedAt,
