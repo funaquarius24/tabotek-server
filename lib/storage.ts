@@ -44,6 +44,21 @@ function fileExtension(originalname: string): string {
   return originalname.substring(originalname.lastIndexOf('.'));
 }
 
+export function toNodeBuffer(value: unknown): Buffer | null {
+  if (value == null) return null;
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+
+  const candidate = value as { buffer?: unknown; position?: unknown };
+  if (candidate.buffer instanceof Uint8Array) {
+    const end =
+      typeof candidate.position === 'number' ? candidate.position : candidate.buffer.length;
+    return Buffer.from(candidate.buffer.subarray(0, end));
+  }
+
+  return null;
+}
+
 async function storeInDatabase(
   buffer: Buffer,
   originalname: string,
@@ -194,7 +209,7 @@ export async function migrateDatabaseToOss(): Promise<{ moved: number; failed: s
 
   for (const file of files) {
     try {
-      const data = file.data as Buffer | undefined;
+      const data = toNodeBuffer(file.data);
       if (!data) {
         throw new Error('missing binary data');
       }

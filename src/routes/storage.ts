@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getFileRecord, resolveStorage } from '../../lib/storage.js';
+import { getFileRecord, resolveStorage, toNodeBuffer } from '../../lib/storage.js';
 import { signUrl } from '../../lib/oss.js';
 
 export const storageRouter = Router();
@@ -16,7 +16,7 @@ storageRouter.get('/file/:id', async (req: Request, res: Response) => {
     const storage = resolveStorage(file);
 
     if (storage === 'database') {
-      const data = file.data as Buffer | undefined;
+      const data = toNodeBuffer(file.data);
 
       if (!data) {
         res.status(404).json({ error: 'File data not found' });
