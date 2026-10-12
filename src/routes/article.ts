@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { ROLE_LEVELS, UserRole } from '../../lib/roles.js';
 
 export const articleRouter = Router();
 
@@ -20,8 +21,9 @@ async function getAuthUser(req: Request) {
   const { db } = await connectToDatabase();
   const user = await db.collection('users').findOne({ _id: new ObjectId(userId) }, { projection: { role: 1, _id: 1 } });
   if (!user) return null;
-  const allowedRoles = ['author', 'editor', 'admin', 'superuser'];
-  return { userId: user._id.toString(), isAuthor: allowedRoles.includes(user.role) };
+  const role = user.role as UserRole;
+  const isAuthor = role in ROLE_LEVELS && role !== 'user';
+  return { userId: user._id.toString(), role, isAuthor };
 }
 
 articleRouter.get('/:slug', async (req: Request, res: Response) => {
@@ -230,7 +232,40 @@ articleRouter.delete('/:slug', async (req: Request, res: Response) => {
     const { slug } = req.params;
     const { db } = await connectToDatabase();
 
-    const result = await db.collection('articles').deleteOne({ slug });
+    const slugQuery = ObjectId.isValid(slug)
+      ? { $or: [{ _id: new ObjectId(slug) }, { slug }] }
+      : { slug };
+    const article = await db.collection('articles').findOne(slugQuery);
+
+    if (!article) {
+      res.status(404).json({ error: 'Article not found' });
+      return;
+    }
+
+    const isOwner = article.authorId?.toString() === auth.userId;
+    if (!isOwner) {
+      if (!article.authorId || !ObjectId.isValid(article.authorId)) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
+
+      const targetAuthor = await db.collection('users').findOne(
+        { _id: new ObjectId(article.authorId) },
+        { projection: { role: 1 } }
+      );
+      const targetRole = targetAuthor?.role as UserRole | undefined;
+      const canDeleteLowerRole = auth.role !== 'author'
+        && targetRole !== undefined
+        && targetRole in ROLE_LEVELS
+        && ROLE_LEVELS[auth.role] > ROLE_LEVELS[targetRole];
+
+      if (!canDeleteLowerRole) {
+        res.status(403).json({ error: 'Forbidden: you can only delete your own article or an article owned by a lower role' });
+        return;
+      }
+    }
+
+    const result = await db.collection('articles').deleteOne({ _id: article._id });
 
     if (result.deletedCount === 0) {
       res.status(404).json({ error: 'Article not found' });

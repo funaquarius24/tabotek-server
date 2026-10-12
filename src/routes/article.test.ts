@@ -119,6 +119,11 @@ describe('Single Article Routes', () => {
 
     it('deletes article when authorized', async () => {
       getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), role: 'author' });
+      getMockCollection('articles').findOne.mockResolvedValue({
+        _id: new ObjectId(createId()),
+        authorId: new ObjectId(userId),
+        slug: 'test-slug',
+      });
       getMockCollection('articles').deleteOne.mockResolvedValue({ deletedCount: 1 });
 
       const res = await request(app)
@@ -129,9 +134,89 @@ describe('Single Article Routes', () => {
       expect(res.body.success).toBe(true);
     });
 
+    it('allows an editor to delete an author article', async () => {
+      const editorId = createId();
+      const authorId = createId();
+      getMockCollection('users').findOne
+        .mockResolvedValueOnce({ _id: new ObjectId(editorId), role: 'editor' })
+        .mockResolvedValueOnce({ _id: new ObjectId(authorId), role: 'author' });
+      getMockCollection('articles').findOne.mockResolvedValue({
+        _id: new ObjectId(createId()),
+        authorId: new ObjectId(authorId),
+        slug: 'author-article',
+      });
+      getMockCollection('articles').deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const res = await request(app)
+        .delete('/api/articles/author-article')
+        .set('Cookie', `user_id=${editorId}`);
+
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects an author deleting another author article', async () => {
+      const authorId = createId();
+      const otherAuthorId = createId();
+      getMockCollection('users').findOne
+        .mockResolvedValueOnce({ _id: new ObjectId(authorId), role: 'author' })
+        .mockResolvedValueOnce({ _id: new ObjectId(otherAuthorId), role: 'author' });
+      getMockCollection('articles').findOne.mockResolvedValue({
+        _id: new ObjectId(createId()),
+        authorId: new ObjectId(otherAuthorId),
+        slug: 'other-author-article',
+      });
+
+      const res = await request(app)
+        .delete('/api/articles/other-author-article')
+        .set('Cookie', `user_id=${authorId}`);
+
+      expect(res.status).toBe(403);
+      expect(getMockCollection('articles').deleteOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor deleting another editor article', async () => {
+      const editorId = createId();
+      const otherEditorId = createId();
+      getMockCollection('users').findOne
+        .mockResolvedValueOnce({ _id: new ObjectId(editorId), role: 'editor' })
+        .mockResolvedValueOnce({ _id: new ObjectId(otherEditorId), role: 'editor' });
+      getMockCollection('articles').findOne.mockResolvedValue({
+        _id: new ObjectId(createId()),
+        authorId: new ObjectId(otherEditorId),
+        slug: 'editor-article',
+      });
+
+      const res = await request(app)
+        .delete('/api/articles/editor-article')
+        .set('Cookie', `user_id=${editorId}`);
+
+      expect(res.status).toBe(403);
+      expect(getMockCollection('articles').deleteOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects an editor deleting an administrator article', async () => {
+      const editorId = createId();
+      const adminId = createId();
+      getMockCollection('users').findOne
+        .mockResolvedValueOnce({ _id: new ObjectId(editorId), role: 'editor' })
+        .mockResolvedValueOnce({ _id: new ObjectId(adminId), role: 'admin' });
+      getMockCollection('articles').findOne.mockResolvedValue({
+        _id: new ObjectId(createId()),
+        authorId: new ObjectId(adminId),
+        slug: 'admin-article',
+      });
+
+      const res = await request(app)
+        .delete('/api/articles/admin-article')
+        .set('Cookie', `user_id=${editorId}`);
+
+      expect(res.status).toBe(403);
+      expect(getMockCollection('articles').deleteOne).not.toHaveBeenCalled();
+    });
+
     it('returns 404 for non-existent article', async () => {
       getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), role: 'author' });
-      getMockCollection('articles').deleteOne.mockResolvedValue({ deletedCount: 0 });
+      getMockCollection('articles').findOne.mockResolvedValue(null);
 
       const res = await request(app)
         .delete('/api/articles/non-existent')
