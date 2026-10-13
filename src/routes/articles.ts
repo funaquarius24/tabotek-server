@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
+import { serializeEditors } from '../../lib/serialize.js';
 
 export const articlesRouter = Router();
 
@@ -75,10 +76,10 @@ articlesRouter.get('/', async (req: Request, res: Response) => {
     const authors = authorIds.length
       ? await db.collection('users').find(
           { _id: { $in: authorIds.map(id => new ObjectId(id)) } },
-          { projection: { _id: 1, name: 1, username: 1 } }
+          { projection: { _id: 1, name: 1, username: 1, authorName: 1 } }
         ).toArray()
       : [];
-    const authorMap = new Map(authors.map(a => [a._id.toString(), { _id: a._id.toString(), name: a.name || a.username }]));
+    const authorMap = new Map(authors.map(a => [a._id.toString(), { _id: a._id.toString(), name: a.authorName || a.name || a.username }]));
 
     const articlesWithStringIds = articles.map(article => ({
       ...article,
@@ -86,6 +87,7 @@ articlesRouter.get('/', async (req: Request, res: Response) => {
       categoryId: article.categoryId?.toString(),
       authorId: article.authorId?.toString(),
       author: authorMap.get(article.authorId?.toString()) || null,
+      editors: serializeEditors(article.editors),
       publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
       createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
       updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
@@ -118,7 +120,7 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
 
     const user = await db.collection('users').findOne(
       { _id: new ObjectId(userId) },
-      { projection: { role: 1, name: 1, username: 1 } }
+      { projection: { role: 1, name: 1, username: 1, authorName: 1 } }
     );
     if (!user) {
       res.status(401).json({ error: 'User not found' });
@@ -153,7 +155,7 @@ articlesRouter.post('/', async (req: Request, res: Response) => {
     const article: Record<string, any> = {
       ...body,
       authorId: new ObjectId(userId),
-      authorName: user.name || user.username || '',
+      authorName: user.authorName || user.name || user.username || '',
       publishedAt: body.publishedAt ? new Date(body.publishedAt) : now,
       views: 0,
       likes: 0,

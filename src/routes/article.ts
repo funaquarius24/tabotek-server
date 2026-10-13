@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
 import { ObjectId } from 'mongodb';
 import { ROLE_LEVELS, UserRole } from '../../lib/roles.js';
+import { serializeEditors } from '../../lib/serialize.js';
 
 export const articleRouter = Router();
 
@@ -9,10 +10,10 @@ async function getAuthorInfo(db: any, authorId: any): Promise<{ _id: string; nam
   if (!authorId || !ObjectId.isValid(authorId)) return null;
   const user = await db.collection('users').findOne(
     { _id: new ObjectId(authorId) },
-    { projection: { name: 1, username: 1 } }
+    { projection: { name: 1, username: 1, authorName: 1 } }
   );
   if (!user) return null;
-  return { _id: user._id.toString(), name: user.name || user.username || '' };
+  return { _id: user._id.toString(), name: user.authorName || user.name || user.username || '' };
 }
 
 async function getAuthUser(req: Request) {
@@ -59,6 +60,7 @@ articleRouter.get('/:slug', async (req: Request, res: Response) => {
       authorId: article.authorId?.toString(),
       authorName: article.authorName ?? author?.name ?? '',
       author,
+      editors: serializeEditors(article.editors),
       publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
       createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
       updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt
@@ -111,15 +113,19 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
       updateData.categoryId = new ObjectId(body.categoryId);
     }
 
-    if (body.authorId) {
-      const newAuthorId = new ObjectId(body.authorId);
-      updateData.authorId = newAuthorId;
-      const authorInfo = await getAuthorInfo(db, newAuthorId);
-      updateData.authorName = authorInfo?.name ?? '';
-    } else {
-      const authorInfo = await getAuthorInfo(db, existingArticle.authorId);
-      updateData.authorName = authorInfo?.name ?? '';
-    }
+    // Ownership must never change on update: keep the original author and
+    // ignore any authorId/authorName/editors sent by the client.
+    delete updateData.authorId;
+    delete updateData.authorName;
+    delete updateData.editors;
+    updateData.authorName =
+      existingArticle.authorName ??
+      (await getAuthorInfo(db, existingArticle.authorId))?.name ??
+      '';
+
+    // Record this edit unless the author is editing their own article.
+    const isOwnEdit = existingArticle.authorId?.toString() === auth.userId;
+    const editorInfo = isOwnEdit ? null : await getAuthorInfo(db, auth.userId);
 
     if (body.status === 'published' && !existingArticle.publishedAt) {
       updateData.publishedAt = new Date();
@@ -139,6 +145,22 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
       return;
     }
 
+    if (editorInfo) {
+      const editorEntry = {
+        userId: new ObjectId(editorInfo._id),
+        name: editorInfo.name,
+        editedAt: new Date(),
+      };
+      await db.collection('articles').updateOne(
+        { _id: existingArticle._id },
+        { $pull: { editors: { userId: editorEntry.userId } } } as any
+      );
+      await db.collection('articles').updateOne(
+        { _id: existingArticle._id },
+        { $push: { editors: editorEntry } } as any
+      );
+    }
+
     const updatedArticle = await db.collection('articles').findOne({ _id: existingArticle._id });
     const author = await getAuthorInfo(db, updatedArticle!.authorId);
 
@@ -149,6 +171,7 @@ articleRouter.put('/:slug', async (req: Request, res: Response) => {
       authorId: updatedArticle!.authorId?.toString(),
       authorName: updatedArticle!.authorName ?? author?.name ?? '',
       author,
+      editors: serializeEditors(updatedArticle!.editors),
       publishedAt: updatedArticle!.publishedAt?.toISOString?.() ?? updatedArticle!.publishedAt,
       createdAt: updatedArticle!.createdAt?.toISOString?.() ?? updatedArticle!.createdAt,
       updatedAt: updatedArticle!.updatedAt?.toISOString?.() ?? updatedArticle!.updatedAt
@@ -211,6 +234,7 @@ articleRouter.post('/:slug/vote', async (req: Request, res: Response) => {
       authorId: updatedArticle!.authorId?.toString(),
       authorName: updatedArticle!.authorName ?? author?.name ?? '',
       author,
+      editors: serializeEditors(updatedArticle!.editors),
       publishedAt: updatedArticle!.publishedAt?.toISOString?.() ?? updatedArticle!.publishedAt,
       createdAt: updatedArticle!.createdAt?.toISOString?.() ?? updatedArticle!.createdAt,
       updatedAt: updatedArticle!.updatedAt?.toISOString?.() ?? updatedArticle!.updatedAt,

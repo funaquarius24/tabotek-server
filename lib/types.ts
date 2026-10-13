@@ -8,6 +8,11 @@ export interface Article {
   excerpt: string;
   categoryId: ObjectId;
   authorId: ObjectId;
+  editors?: {
+    userId: ObjectId;
+    name: string;
+    editedAt: Date;
+  }[];
   featuredImage: string;
   tags: string[];
   readTime: number;
@@ -43,6 +48,7 @@ export interface User {
   name: string;
   email: string;
   role: 'superuser' | 'admin' | 'editor' | 'author' | 'user';
+  authorName?: string;
   avatar: string;
   bio: string;
   totalLikes: number;
@@ -62,6 +68,11 @@ export interface ArticleResponse {
   authorId: string;
   authorName?: string;
   author?: { _id: string; name: string } | null;
+  editors?: {
+    userId: string;
+    name: string;
+    editedAt: string;
+  }[];
   featuredImage: string;
   tags: string[];
   readTime: number;

@@ -168,6 +168,7 @@ usersRouter.put('/:id', async (req: Request, res: Response) => {
     const updateData: any = { updatedAt: new Date() };
 
     if (body.name !== undefined) updateData.name = body.name;
+    if (body.authorName !== undefined) updateData.authorName = body.authorName;
     if (body.email !== undefined) updateData.email = body.email.toLowerCase();
     if (body.role !== undefined) updateData.role = body.role;
     if (body.bio !== undefined) updateData.bio = body.bio;

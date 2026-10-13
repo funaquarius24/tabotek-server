@@ -66,6 +66,57 @@ describe('Single Article Routes', () => {
       expect(res.body.title).toBe('Updated');
     });
 
+    it('keeps the original author and records the editor when a different user edits', async () => {
+      const adminId = createId();
+      const originalAuthorId = createId();
+      getMockCollection('users').findOne
+        .mockResolvedValueOnce({ _id: new ObjectId(adminId), role: 'admin' })
+        .mockResolvedValueOnce({ _id: new ObjectId(adminId), name: 'Admin User' })
+        .mockResolvedValueOnce({ _id: new ObjectId(originalAuthorId), name: 'Original Author' });
+      getMockCollection('articles').findOne
+        .mockResolvedValueOnce({ slug: 'test-slug', title: 'Old', status: 'draft', _id: new ObjectId(createId()), categoryId: new ObjectId(createId()), authorId: new ObjectId(originalAuthorId), authorName: 'Original Author', editors: [], publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date() })
+        .mockResolvedValueOnce({ slug: 'test-slug', title: 'New', status: 'draft', _id: new ObjectId(createId()), categoryId: new ObjectId(createId()), authorId: new ObjectId(originalAuthorId), authorName: 'Original Author', editors: [{ userId: new ObjectId(adminId), name: 'Admin User', editedAt: new Date() }], publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
+      getMockCollection('articles').updateOne.mockResolvedValue({ modifiedCount: 1 });
+
+      const res = await request(app)
+        .put('/api/articles/test-slug')
+        .set('Cookie', `user_id=${adminId}`)
+        .send({ title: 'New', authorId: adminId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.authorId).toBe(originalAuthorId);
+      const calls = getMockCollection('articles').updateOne.mock.calls;
+      const mainSet = calls[0][1].$set;
+      expect(mainSet.authorId).toBeUndefined();
+      expect(mainSet.editors).toBeUndefined();
+      const pushCall = calls.find((c) => c[1].$push);
+      expect(pushCall).toBeTruthy();
+      expect(pushCall![1].$push.editors.userId.toString()).toBe(adminId);
+      expect(pushCall![1].$push.editors.name).toBe('Admin User');
+      expect(res.body.editors).toHaveLength(1);
+    });
+
+    it('does not add an editor entry when the author edits their own article', async () => {
+      getMockCollection('users').findOne
+        .mockResolvedValueOnce({ _id: new ObjectId(userId), role: 'author' })
+        .mockResolvedValueOnce({ _id: new ObjectId(userId), name: 'Author' });
+      getMockCollection('articles').findOne
+        .mockResolvedValueOnce({ slug: 'test-slug', title: 'Old', status: 'draft', _id: new ObjectId(createId()), categoryId: new ObjectId(createId()), authorId: new ObjectId(userId), authorName: 'Author', editors: [], publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date() })
+        .mockResolvedValueOnce({ slug: 'test-slug', title: 'New', status: 'draft', _id: new ObjectId(createId()), categoryId: new ObjectId(createId()), authorId: new ObjectId(userId), authorName: 'Author', editors: [], publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
+      getMockCollection('articles').updateOne.mockResolvedValue({ modifiedCount: 1 });
+
+      const res = await request(app)
+        .put('/api/articles/test-slug')
+        .set('Cookie', `user_id=${userId}`)
+        .send({ title: 'New', authorId: userId });
+
+      expect(res.status).toBe(200);
+      const mainSet = getMockCollection('articles').updateOne.mock.calls[0][1].$set;
+      expect(mainSet.authorId).toBeUndefined();
+      expect(mainSet.editors).toBeUndefined();
+      expect(getMockCollection('articles').updateOne.mock.calls.filter((c) => c[1].$push)).toHaveLength(0);
+    });
+
     it('returns 404 for non-existent article', async () => {
       getMockCollection('users').findOne.mockResolvedValue({ _id: new ObjectId(userId), role: 'author' });
       getMockCollection('articles').findOne.mockResolvedValue(null);

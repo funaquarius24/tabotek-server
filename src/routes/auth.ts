@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
+import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { signUrl, getOssEndpoint } from '../../lib/oss.js';
@@ -86,6 +87,7 @@ authRouter.post('/signin', async (req: Request, res: Response) => {
         _id: user._id.toString(),
         email: user.email,
         name: user.name,
+        authorName: user.authorName || user.name,
         role: user.role
       }
     });
@@ -123,10 +125,13 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
     const verifyToken = randomBytes(32).toString('hex');
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+    const displayName = name || email.split('@')[0];
+
     const user: Record<string, unknown> = {
       email: email.toLowerCase(),
       passwordHash,
-      name: name || email.split('@')[0],
+      name: displayName,
+      authorName: displayName,
       role: 'user',
       avatar: avatarUrl || '',
       emailVerified: false,
@@ -157,6 +162,42 @@ authRouter.post('/signout', async (_req: Request, res: Response) => {
     sameSite: 'lax',
   });
   res.json({ success: true });
+});
+
+authRouter.put('/author-name', async (req: Request, res: Response) => {
+  try {
+    const userId = req.cookies?.user_id;
+    if (!userId || !ObjectId.isValid(userId)) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const rawName = typeof req.body?.authorName === 'string' ? req.body.authorName.trim() : '';
+    if (!rawName) {
+      res.status(400).json({ error: 'Author name is required' });
+      return;
+    }
+    if (rawName.length > 60) {
+      res.status(400).json({ error: 'Author name must be 60 characters or fewer' });
+      return;
+    }
+
+    const { db } = await connectToDatabase();
+    const result = await db.collection('users').updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { authorName: rawName, updatedAt: new Date() } }
+    );
+
+    if (result.matchedCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({ success: true, authorName: rawName });
+  } catch (error) {
+    console.error('Error updating author name:', error);
+    res.status(500).json({ error: 'Failed to update author name' });
+  }
 });
 
 authRouter.post('/verify-email', async (req: Request, res: Response) => {

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { connectToDatabase } from '../../lib/mongodb.js';
+import { serializeEditors } from '../../lib/serialize.js';
 
 export const articlesSearchRouter = Router();
 
@@ -43,6 +44,7 @@ articlesSearchRouter.get('/search', async (req: Request, res: Response) => {
       _id: article._id.toString(),
       categoryId: article.categoryId?.toString(),
       authorId: article.authorId?.toString(),
+      editors: serializeEditors(article.editors),
       publishedAt: article.publishedAt?.toISOString?.() ?? article.publishedAt,
       createdAt: article.createdAt?.toISOString?.() ?? article.createdAt,
       updatedAt: article.updatedAt?.toISOString?.() ?? article.updatedAt

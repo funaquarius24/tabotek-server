@@ -26,6 +26,7 @@ sessionRouter.get('/session', async (req: Request, res: Response) => {
         _id: user._id.toString(),
         email: user.email,
         name: user.name,
+        authorName: user.authorName || user.name,
         role: user.role,
       },
     });
